@@ -11,6 +11,8 @@ let package = Package(
         .executableTarget(
             name: "ClawdIsland",
             dependencies: [.product(name: "Sparkle", package: "Sparkle")],
+            // Shell hooks live under Sources for grouping but aren't compiled.
+            exclude: ["Hooks"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

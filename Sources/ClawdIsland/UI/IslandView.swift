@@ -24,6 +24,8 @@ struct IslandView: View {
 
     /// 5-Hour tile: false = show burn-rate ETA when available, true = always show reset.
     @State private var prefReset = false
+    /// Drives the pulsing activity dot shown while Claude Code is running a tool.
+    @State private var pulse = false
 
     private let wing: CGFloat = 56
     private let iconSize: CGFloat = 18
@@ -58,6 +60,7 @@ struct IslandView: View {
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
+        .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
 
     // Right-click menu (replaces the menu-bar item).
@@ -100,19 +103,51 @@ struct IslandView: View {
 
             Color.clear.frame(width: gap, height: closedH)
 
-            HStack(spacing: 5) {
-                Text(model.sessionUsage.map(Fmt.pct) ?? "—")
-                    .font(.system(size: 12, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(.white)
-                Ring(fraction: used, state: RingState(usage: used), lineWidth: 3)
-                    .frame(width: 14, height: 14)
+            Group {
+                // While a tool is running, the right wing shows the live tool name; otherwise the
+                // session-usage readout. Real-time status takes priority over the % when both exist.
+                if let act = model.activity {
+                    activityReadout(act)
+                } else {
+                    usageReadout
+                }
             }
             .frame(width: wing, height: closedH)
-            .opacity(model.isStale ? 0.5 : 1)          // dim when data isn't fresh
             .contentShape(Rectangle())
             .onTapGesture { model.isExpanded.toggle() }
         }
         .padding(.horizontal, edgeInset)
+    }
+
+    // Session-usage %, shown when Claude Code is idle.
+    private var usageReadout: some View {
+        HStack(spacing: 5) {
+            Text(model.sessionUsage.map(Fmt.pct) ?? "—")
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(.white)
+            Ring(fraction: used, state: RingState(usage: used), lineWidth: 3)
+                .frame(width: 14, height: 14)
+        }
+        .opacity(model.isStale ? 0.5 : 1)          // dim when data isn't fresh
+    }
+
+    // Live tool status: a pulsing dot plus the running tool's name (with a "+N" badge when more
+    // than one session is active). Text scales down before it clips in the narrow wing.
+    private func activityReadout(_ act: SessionActivity) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(Color.tileGreen)
+                .frame(width: 6, height: 6)
+                .opacity(pulse ? 1 : 0.35)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                        pulse = true
+                    }
+                }
+            Text(act.runningCount > 1 ? "\(act.tool) +\(act.runningCount - 1)" : act.tool)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1).truncationMode(.tail).minimumScaleFactor(0.6)
+        }
     }
 
     // Reports the drop-down's natural laid-out height into the model, so the pill frame and the
@@ -258,4 +293,6 @@ private extension Color {
     /// `Ring.swift` uses its own, deliberately brighter palette and is left untouched.)
     static let tileAmber = Color(red: 0.96, green: 0.70, blue: 0.20)
     static let tileRed = Color(red: 0.92, green: 0.34, blue: 0.34)
+    /// Live-activity accent for the running-tool indicator dot.
+    static let tileGreen = Color(red: 0.36, green: 0.85, blue: 0.52)
 }

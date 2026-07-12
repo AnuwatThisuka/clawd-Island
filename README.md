@@ -20,6 +20,7 @@ care about spread out into a proper dashboard.
 |                            |                                                                                                                      |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Session ring**           | Live 5-hour and 7-day usage, colour-coded (white → amber → red) so you can tell your status without reading a number |
+| **Live tool status**       | While Claude Code is working, the notch shows a green pulse and the tool it's running right now — Bash, Edit, a web fetch — then flips back to your usage % the moment it goes idle (opt-in, see below) |
 | **Full breakdown on tap**  | 5-hour, 7-day, extra credits, today's cost, today's token count, and your current plan — six tiles, one click away   |
 | **Real reset timers**      | Not estimates — the actual countdown Claude Desktop shows you                                                        |
 | **Local cost tracking**    | Today's spend and token count are computed straight from your `~/.claude` logs, no network call needed for that part |
@@ -72,6 +73,41 @@ which leaves `Clawd Island.app` (and a zip) in `dist/`.
 On first launch, choose **Always Allow** on the Keychain prompt — otherwise it'll ask
 again every time you relaunch. Right-click the island afterward and turn on
 **Launch at Login** if you want it to just always be there.
+
+## Live tool status (optional)
+
+The notch can also show what Claude Code is doing in real time — a green pulse plus the
+tool it's running this instant. This piece is opt-in because it works through Claude
+Code's own hooks rather than the usage feed.
+
+**Requires [`jq`](https://jqlang.github.io/jq/):**
+
+```bash
+brew install jq
+```
+
+Then install the hooks once:
+
+```bash
+bash scripts/install-hooks.sh
+```
+
+That registers three async hooks (SessionStart, PreToolUse, Stop) in
+`~/.claude/settings.json`, all pointing at `Sources/ClawdIsland/Hooks/session-hook.sh`.
+The installer backs up any existing settings once to
+`settings.json.bak-clawdisland` and **merges** — hooks you've configured yourself are
+left untouched, and re-running it never duplicates our entries. Each hook is a passive
+observer marked `"async": true`, so it never blocks or slows a Claude Code session; it
+just drops a tiny state file under
+`~/Library/Application Support/ClawdIsland/state.d/` that the island polls.
+
+Open a new `claude` session for the hooks to take effect. To remove them again:
+
+```bash
+bash scripts/uninstall-hooks.sh
+```
+
+which strips only our hooks and leaves everything else in place.
 
 ## Day to day
 

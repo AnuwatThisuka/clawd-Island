@@ -4,6 +4,9 @@ import SwiftUI
 @MainActor @Observable
 final class AppModel {
     private(set) var snapshot: UsageSnapshot = .empty
+    /// Live "what Claude Code is doing right now" status, driven by the hook state files.
+    /// nil = nothing running. Updated ~3×/s off the `state.d/` heartbeat feed.
+    private(set) var activity: SessionActivity?
     var isExpanded = false
     var isPaused = false
     var claudeRunning = false
@@ -36,6 +39,9 @@ final class AppModel {
     private var watcher: LogWatcher?
     private var ticker: Timer?
     private var limitsTimer: Timer?
+    /// Fast poll (~300ms) of the hook state feed — real-time, so it runs far tighter than the
+    /// 5s usage ticker and 60s limits fetch.
+    private var activityTimer: Timer?
     /// mtime of each log file the last time we parsed it, so the periodic sweep re-reads only
     /// files that actually grew and skips the rest.
     private var parsedMTimes: [URL: Date] = [:]
@@ -103,8 +109,20 @@ final class AppModel {
         limitsTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.fetchLimits() }
         }
+        activityTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.readActivity() }
+        }
         Task { await ingest(ClaudePaths.recentLogFiles(within: 2)) }
         fetchLimits()
+        readActivity()
+    }
+
+    /// Refresh the live tool-activity status from the hook feed. Gated on `isPaused` (pausing
+    /// tracking hides live status too) and only reassigns on an actual change so the observable
+    /// property doesn't invalidate the view 3×/s while nothing is happening.
+    private func readActivity() {
+        let next = isPaused ? nil : SessionActivityFeed.read()
+        if next != activity { activity = next }
     }
 
     func togglePause() { isPaused.toggle(); if !isPaused { refresh() } }

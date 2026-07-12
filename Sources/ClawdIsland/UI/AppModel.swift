@@ -13,6 +13,10 @@ final class AppModel {
     /// Notch geometry of the screen the island lives on (updated on display changes).
     var notchWidth: CGFloat = 190
     var topInset: CGFloat = 32
+    /// Measured natural height of the expanded drop-down content. Written by IslandView once
+    /// the tile grid lays out, read by IslandWindow to size the click-catcher. Starts at a
+    /// sensible estimate so the very first expand isn't clipped before the measurement lands.
+    var dropHeight: CGFloat = 198
 
     /// Live account limits from claude.ai (authoritative, matches Claude Desktop).
     private(set) var limits: ClaudeLimits?

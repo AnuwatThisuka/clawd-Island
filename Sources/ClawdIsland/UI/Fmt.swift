@@ -35,13 +35,29 @@ enum Fmt {
     }
     static func usd(_ v: Double) -> String { String(format: "$%.2f", v) }
 
-    /// "default_claude_max_5x" -> "Claude Max 5x"; "…_pro" -> "Claude Pro".
+    /// "default_claude_max_5x" -> "Claude Max 5x"; "default_claude_ai" -> "Claude Free".
     static func planLabel(_ raw: String) -> String {
+        // Explicit labels for every tier we've actually observed from
+        // oauthAccount.organizationRateLimitTier in ~/.claude.json. Note that
+        // "default_claude_ai" is the base/free tier — the old generic logic
+        // stripped it down to "ai" and rendered "Claude Ai".
+        let known: [String: String] = [
+            "default_claude_ai": "Claude Free",
+            "default_claude_pro": "Claude Pro",
+            "default_claude_max_5x": "Claude Max 5x",
+            "default_claude_max_20x": "Claude Max 20x",
+            "default_claude_team": "Claude Team",
+            "default_claude_enterprise": "Claude Enterprise",
+        ]
+        if let label = known[raw] { return label }
+
+        // Fallback for an unknown/future tier: strip the known prefixes and
+        // prettify so it still reads as a plan name rather than a raw token.
         var s = raw.replacingOccurrences(of: "default_", with: "")
                    .replacingOccurrences(of: "claude_", with: "")
         if s.hasPrefix("max_") {
             s = s.replacingOccurrences(of: "max_", with: "")
-            return "Claude Max \(s)"          // "5x"
+            return "Claude Max \(s)"          // e.g. "50x"
         }
         return "Claude " + s.replacingOccurrences(of: "_", with: " ").capitalized
     }

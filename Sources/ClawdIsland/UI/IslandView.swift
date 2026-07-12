@@ -28,9 +28,9 @@ struct IslandView: View {
     private let wing: CGFloat = 56
     private let iconSize: CGFloat = 18
     private let edgeInset: CGFloat = 12   // keeps content off the pill's flared edges
-    private let dropHeight: CGFloat = 196
 
     private var expanded: Bool { model.isExpanded }
+    private var dropHeight: CGFloat { model.dropHeight }   // measured from the tile grid
     private var closedH: CGFloat { max(topInset, 30) }
     private var gap: CGFloat { notchWidth }
     private var closedWidth: CGFloat { wing + gap + wing + edgeInset * 2 }
@@ -44,7 +44,8 @@ struct IslandView: View {
             VStack(spacing: 0) {
                 notchRow.frame(width: closedWidth, height: closedH)
                 dropDown
-                    .frame(width: closedWidth, height: dropHeight, alignment: .top)
+                    .frame(width: closedWidth, alignment: .top)   // natural height, measured below
+                    .background(dropHeightReader)
                     .opacity(expanded ? 1 : 0)
             }
         }
@@ -55,6 +56,7 @@ struct IslandView: View {
         .contentShape(shape)
         .contextMenu { menu }
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
+        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
     }
 
@@ -113,23 +115,33 @@ struct IslandView: View {
         .padding(.horizontal, edgeInset)
     }
 
+    // Reports the drop-down's natural laid-out height into the model, so the pill frame and the
+    // window's click-catcher both track the real content instead of a hard-coded constant.
+    private var dropHeightReader: some View {
+        GeometryReader { geo in
+            Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
+                if h > 0 { model.dropHeight = h }
+            }
+        }
+    }
+
     // MARK: drop-down — tile grid below the notch
 
     private var dropDown: some View {
         let s = model.snapshot
         return VStack(spacing: 8) {
             LazyVGrid(columns: [.init(.flexible(), spacing: 8), .init(.flexible(), spacing: 8)], spacing: 8) {
-                limitTile("5-Hour", model.sessionUsage, resets: model.sessionResetsAt,
+                limitTile("5-Hour", icon: "hourglass", model.sessionUsage, resets: model.sessionResetsAt,
                           eta: prefReset ? nil : model.etaToLimit)
                     .contentShape(Rectangle())
                     .onTapGesture { if model.etaToLimit != nil { prefReset.toggle() } }
                     .help(model.etaToLimit != nil ? "Click to switch reset / burn-rate" : "")
-                limitTile("7-Day", model.weeklyUsage, resets: model.weeklyResetsAt,
+                limitTile("7-Day", icon: "calendar", model.weeklyUsage, resets: model.weeklyResetsAt,
                           breakdown: weeklyBreakdown)
-                tile("credits", model.limits?.creditsPct.map { Fmt.pct($0) + " used" } ?? "none", height: .compact)
-                tile("cost today", s.isEmpty ? "—" : Fmt.usd(s.costToday), height: .compact)
-                tile("tokens today", s.isEmpty ? "—" : Fmt.tokens(s.tokensToday), height: .compact)
-                tile("plan", shortPlan, height: .compact)
+                tile("credits", icon: "gift", model.limits?.creditsPct.map { Fmt.pct($0) + " used" } ?? "none", numeric: true)
+                tile("cost today", icon: "dollarsign.circle", s.isEmpty ? "—" : Fmt.usd(s.costToday), numeric: true)
+                tile("tokens today", icon: "cpu", s.isEmpty ? "—" : Fmt.tokens(s.tokensToday), numeric: true)
+                tile("plan", icon: "crown", shortPlan, numeric: false)
             }
             .opacity(model.isStale ? 0.55 : 1)         // dim live limits when not fresh
 
@@ -156,15 +168,18 @@ struct IslandView: View {
         return "Opus \(Fmt.pct(o)) · Sonnet \(Fmt.pct(s))"
     }
 
-    // A limit tile: label, big colour-coded %, a "resets in …" subline, and an optional
-    // per-model breakdown line (used by the 7-Day tile when Opus/Sonnet are tracked separately).
-    private func limitTile(_ label: String, _ value: Double?, resets: Date?,
+    // A primary limit tile: icon+label, a large colour-coded %, a thin progress bar showing the
+    // real fraction, a "resets in …" subline, and an optional per-model breakdown line (used by
+    // the 7-Day tile when Opus/Sonnet are tracked separately). These read as the top tier: bigger
+    // number, stronger card fill than the secondary tiles below.
+    private func limitTile(_ label: String, icon: String, _ value: Double?, resets: Date?,
                            eta: TimeInterval? = nil, breakdown: String? = nil) -> some View {
-        tileBox {
-            Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 3) {
+            tileLabel(label, icon: icon)
             Text(value.map(Fmt.pct) ?? "—")
-                .font(.system(size: 16, weight: .semibold)).monospacedDigit()
+                .font(.system(size: 26, weight: .medium)).monospacedDigit()   // mono: no jitter on 60s updates
                 .foregroundStyle(barColor(value ?? 0))
+            progressBar(value ?? 0)
             if let eta {
                 Text("~\(Fmt.dur(eta)) to limit")
                     .font(.system(size: 9.5, weight: .medium)).lineLimit(1)
@@ -179,30 +194,45 @@ struct IslandView: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .tileCard(0.09)
     }
 
-    enum TileHeight { case compact, tall
-        var minHeight: CGFloat { self == .compact ? 34 : 54 }
-        var valueSize: CGFloat { self == .compact ? 13 : 17 }
-    }
-
-    // A plain value tile.
-    private func tile(_ label: String, _ value: String, height: TileHeight) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
-            Text(value).font(.system(size: height.valueSize, weight: .medium)).monospacedDigit()
+    // A secondary value tile: smaller number, fainter card. Clearly a lower tier than the two
+    // limit tiles above. `numeric` gets monospaced digits (steady width as values tick).
+    private func tile(_ label: String, icon: String, _ value: String, numeric: Bool) -> some View {
+        let valueText = Text(value).font(.system(size: 15, weight: .medium))
+        return VStack(alignment: .leading, spacing: 2) {
+            tileLabel(label, icon: icon)
+            (numeric ? valueText.monospacedDigit() : valueText)
                 .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .frame(maxWidth: .infinity, minHeight: height.minHeight, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .topLeading)
         .padding(.horizontal, 10).padding(.vertical, 7)
-        .tileCard()
+        .tileCard(0.035)
     }
 
-    private func tileBox<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 2, content: content)
-            .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .tileCard()
+    // Shared icon+label header row for every tile.
+    private func tileLabel(_ label: String, icon: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 9))
+            Text(label).font(.system(size: 10))
+        }
+        .foregroundStyle(.white.opacity(0.5))
+    }
+
+    // Thin rounded bar filling to `fraction`, colour-matched to the % via barColor/RingState.
+    private func progressBar(_ fraction: Double) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.12))
+                Capsule().fill(barColor(fraction))
+                    .frame(width: max(2, geo.size.width * min(1, max(0, fraction))))
+            }
+        }
+        .frame(height: 4)
+        .animation(.easeInOut(duration: 0.5), value: fraction)
     }
 
     private func barColor(_ used: Double) -> Color {
@@ -215,9 +245,10 @@ struct IslandView: View {
 }
 
 private extension View {
-    /// The translucent rounded backing shared by every island tile.
-    func tileCard() -> some View {
-        background(Color.white.opacity(0.06))
+    /// The translucent rounded backing shared by every island tile. `opacity` sets the tier:
+    /// stronger for the primary limit tiles, fainter for the secondary value tiles.
+    func tileCard(_ opacity: Double = 0.06) -> some View {
+        background(Color.white.opacity(opacity))
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

@@ -80,12 +80,19 @@ struct IslandView: View {
         .clipShape(shape)
         .contentShape(shape)
         .contextMenu { menu }
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: model.activityDropHeight)
+        // Notchnook / Dynamic Island feel: snappy drop with a light elastic settle
+        // (was response 0.6 / damping 1.0 — heavy and critically damped).
+        .animation(Self.islandSpring, value: expanded)
+        .animation(Self.islandSpring, value: dropHeight)
+        .animation(Self.islandSpring, value: model.activityDropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
         .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
+
+    /// Expand/collapse spring tuned for a Notchnook-like notch morph: quick response with a
+    /// subtle underdamped settle so the pill overshoots a hair then lands, instead of easing
+    /// in like a modal sheet.
+    private static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
     // Right-click menu (replaces the menu-bar item).
     @ViewBuilder private var menu: some View {

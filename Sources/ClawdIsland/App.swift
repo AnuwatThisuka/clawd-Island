@@ -39,12 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.show()
     }
 
-    /// withObservationTracking fires once, so re-arm after each change to keep tracking
-    /// isExpanded. Only the invisible click-zone is resized here — the window and the pill
-    /// animation are untouched, so nothing jumps.
+    /// withObservationTracking fires once, so re-arm after each change to keep tracking. Watches
+    /// both `isExpanded` and `activity`: expanding resizes the click-zone, and a tool
+    /// starting/stopping floats the pill (activeStateTopGap), which shifts the zone down to match.
+    /// Only the invisible click-zone is resized here — the window and pill animation are untouched.
     private func observeExpansion() {
         withObservationTracking {
             _ = model.isExpanded
+            _ = model.activity != nil
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

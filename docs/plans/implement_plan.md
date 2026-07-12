@@ -128,26 +128,38 @@ matching the reference screenshot, instead of being fused flush against it
 
 **Decide before writing code:**
 
-- [ ] Confirm reading: collapsed/idle pill stays flush with the physical
+- [x] Confirm reading: collapsed/idle pill stays flush with the physical
       notch (unchanged, matches what's shipped); only the expanded/active
       state gets the gap. The reference screenshot only shows the active
       state — don't assume the idle pill should move too without confirming
+      → CONFIRMED with user: gap only when `model.activity != nil` (tool
+        running). Idle % + ring AND clicked-open tile grid both stay flush.
 
 **Implementation:**
 
-- [ ] Introduce a vertical offset constant (e.g. `activeStateTopGap: CGFloat`)
+- [x] Introduce a vertical offset constant (e.g. `activeStateTopGap: CGFloat`)
       applied only when rendering the activity view, not the idle view
-- [ ] Re-read the current `IslandWindow.swift` before editing — confirm the
+      → `IslandView.activeStateTopGap = 12`, applied as top padding in
+        `IslandRootView` only when active; click-catcher shifts down to match.
+- [x] Re-read the current `IslandWindow.swift` before editing — confirm the
       fixed-size-window-with-repositioned-content approach discussed
       originally still matches the current code (it may have drifted since)
+      → still accurate: fixed 260-tall strip flush at screen top, content
+        top-anchored in `IslandRootView`; offset achieved via padding, not a
+        window resize. `updateInteractiveZone` shifts the hit-rect by the gap.
 - [ ] Re-verify the gap looks correct on both notched and non-notched
       (fake-notch) displays — don't regress the multi-display robustness
       work already shipped (`v0.1.4`)
+      → NEEDS USER: visual check on both display types.
+      → CAVEAT: NotchShape still has concave top flares (built to blend into
+        the menu bar). Detached by the gap, those flares hang mid-air and read
+        oddly. The proper detached-pill shape belongs to Phase D (content
+        redesign); Phase C ships positioning only.
 
 **Tests:**
 
-- [ ] No meaningful unit test (pure positioning) — screenshot verification
-      only, same workflow as previous UI phases
+- [x] No meaningful unit test (pure positioning) — screenshot verification
+      only, same workflow as previous UI phases  (build clean, 36 tests green)
 
 ---
 

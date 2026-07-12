@@ -2,12 +2,18 @@ import SwiftUI
 import AppKit
 
 /// Top-anchors the pill inside the fixed full-width window, horizontally centered on the notch.
+/// While a tool is running the pill drops by `IslandView.activeStateTopGap` so it detaches from the
+/// physical notch and floats (Phase C). Idle — % + ring, or the clicked-open tile grid — stays flush.
 struct IslandRootView: View {
     let model: AppModel
+
+    private var active: Bool { model.activity != nil }
 
     var body: some View {
         VStack(spacing: 0) {
             IslandView(model: model, notchWidth: model.notchWidth, topInset: model.topInset)
+                .padding(.top, active ? IslandView.activeStateTopGap : 0)
+                .animation(.easeInOut(duration: 0.25), value: active)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -30,6 +36,12 @@ struct IslandView: View {
     private let wing: CGFloat = 56
     private let iconSize: CGFloat = 18
     private let edgeInset: CGFloat = 12   // keeps content off the pill's flared edges
+
+    /// Gap between the screen's top edge and the pill while a tool is running, so the active status
+    /// detaches from the physical notch and floats (Phase C). Applied in `IslandRootView`; the
+    /// window's click-catcher (`IslandWindow.updateInteractiveZone`) shifts down by the same amount.
+    /// Idle and clicked-open states stay flush (gap = 0), matching the shipped look.
+    static let activeStateTopGap: CGFloat = 12
 
     private var expanded: Bool { model.isExpanded }
     private var dropHeight: CGFloat { model.dropHeight }   // measured from the tile grid

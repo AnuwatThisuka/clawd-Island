@@ -65,9 +65,13 @@ final class IslandWindow {
         let dropH = model.dropHeight                        // measured from the tile grid
         let zoneW = model.notchWidth + 56 * 2 + 24 + 24    // wing+gap+wing + edge insets + margin
         let zoneH = (model.isExpanded ? closedH + dropH + 8 : closedH + 6)
+        // While a tool runs, the pill floats down by activeStateTopGap; the click-catcher follows so
+        // the hit region tracks the pill instead of the (now empty) top edge. (Bottom-left origin, so
+        // dropping the content means lowering y.)
+        let topGap = (model.activity != nil) ? IslandView.activeStateTopGap : 0
         let w = hosting.bounds.width
         let h = hosting.bounds.height
-        hosting.interactiveRect = CGRect(x: (w - zoneW) / 2, y: h - zoneH, width: zoneW, height: zoneH)
+        hosting.interactiveRect = CGRect(x: (w - zoneW) / 2, y: h - zoneH - topGap, width: zoneW, height: zoneH)
     }
 
     func show() { panel.orderFrontRegardless() }

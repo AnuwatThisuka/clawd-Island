@@ -12,7 +12,10 @@
 #   • Then:  NOTARY_PROFILE=clawd-island-notary bash scripts/make-app.sh
 set -euo pipefail
 
-export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode-beta.app/Contents/Developer}"
+# Prefer Xcode-beta when present (local); otherwise use the active toolchain (CI / standard Xcode).
+if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode-beta.app/Contents/Developer ]; then
+  export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="Clawd Island"
 DIST="$ROOT/dist"

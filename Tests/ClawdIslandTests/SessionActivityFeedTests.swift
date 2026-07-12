@@ -35,9 +35,11 @@ import Foundation
 
     // MARK: read() over a fixture dir
 
-    /// Writes a state file into a temp dir; `age` is how long ago it was last stamped.
+    /// Writes a state file into a temp dir. `age` is how long ago `updated_at` was stamped;
+    /// `startedAge`, when given, stamps a separate `started_at` that far in the past — mirroring
+    /// the hook's split fields (a run that began long ago but is still heartbeating).
     private func writeState(_ dir: URL, id: String, status: String, tool: String?,
-                            age: TimeInterval, now: Date) throws {
+                            age: TimeInterval, now: Date, startedAge: TimeInterval? = nil) throws {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime]
         var obj: [String: Any] = [
@@ -46,6 +48,7 @@ import Foundation
             "updated_at": iso.string(from: now.addingTimeInterval(-age)),
         ]
         if let tool { obj["tool_name"] = tool }
+        if let startedAge { obj["started_at"] = iso.string(from: now.addingTimeInterval(-startedAge)) }
         let data = try JSONSerialization.data(withJSONObject: obj)
         try data.write(to: dir.appendingPathComponent("\(id).json"))
     }
@@ -103,6 +106,36 @@ import Foundation
         let act = SessionActivityFeed.read(now: now, from: dir)
         #expect(act?.tool == "Edit")
         #expect(act?.runningCount == 2)   // s3 idle is excluded
+    }
+
+    // A run that started long ago but is still heartbeating (fresh updated_at) stays live, and the
+    // surfaced startedAt reflects the old start — this is exactly the long-running-tool case the
+    // split started_at/updated_at fields exist to handle.
+    @Test func oldStartWithFreshHeartbeatIsLive() throws {
+        let now = Date()
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try writeState(dir, id: "s1", status: "running", tool: "Bash",
+                       age: 1, now: now, startedAge: 300)  // heartbeat 1s ago, started 5m ago
+        let act = SessionActivityFeed.read(now: now, from: dir)
+        #expect(act?.tool == "Bash")
+        #expect(act?.runningCount == 1)
+        // startedAt carries the old start, not the recent heartbeat, so the timer counts from t-300.
+        let started = try #require(act?.startedAt)
+        #expect(abs(started.timeIntervalSince(now.addingTimeInterval(-300))) < 1)
+    }
+
+    // Old/partial state files predate started_at. Parsing must not crash and must fall back to
+    // updated_at rather than dropping the session.
+    @Test func missingStartedAtFallsBackToUpdatedAt() throws {
+        let now = Date()
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try writeState(dir, id: "s1", status: "running", tool: "Edit", age: 2, now: now)  // no started_at
+        let act = SessionActivityFeed.read(now: now, from: dir)
+        #expect(act?.tool == "Edit")
+        let started = try #require(act?.startedAt)
+        #expect(abs(started.timeIntervalSince(now.addingTimeInterval(-2))) < 1)  // == updated_at
     }
 
     // A stale running session alongside a fresh one must not inflate the running count.

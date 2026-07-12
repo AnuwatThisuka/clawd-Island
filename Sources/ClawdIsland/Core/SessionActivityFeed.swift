@@ -20,10 +20,17 @@ enum SessionActivityFeed {
     }
 
     /// A session whose last heartbeat is older than this is treated as dead and ignored. Kept far
-    /// shorter than the usage feed's 150s staleness because hook events are real-time — a running
-    /// tool re-stamps its file the instant it starts, so a fresh signal is never more than a moment
-    /// old. Short enough to feel live, long enough to ride out a brief scheduling hiccup.
-    static let liveWithin: TimeInterval = 12
+    /// shorter than the usage feed's 150s staleness because hook events are real-time.
+    ///
+    /// Sizing is a deliberate compromise, not a fully-solved problem. Claude Code fires no
+    /// mid-tool heartbeat event (verified against code.claude.com/docs/en/hooks) — only
+    /// PreToolUse at the start and PostToolUse at the end. So a *single* long-running tool
+    /// re-stamps nothing between those two points: a 20s `sleep` is silent for 20s. To keep it
+    /// showing "running" the whole time, this window must comfortably exceed a typical slow tool,
+    /// hence 45s rather than the original 12s. A sequence of ordinary tools stays live via the
+    /// PostToolUse heartbeat; a tool that runs longer than this window will still lapse to idle
+    /// and recover on its PostToolUse — an accepted edge, not a claim of full coverage.
+    static let liveWithin: TimeInterval = 45
 
     /// The current activity across all live sessions, or nil when nothing is running right now.
     ///
@@ -40,7 +47,7 @@ enum SessionActivityFeed {
         guard let entries = try? fm.contentsOfDirectory(at: dir,
                                                         includingPropertiesForKeys: nil) else { return nil }
 
-        var running: [(tool: String, updated: Date)] = []
+        var running: [(tool: String, updated: Date, started: Date)] = []
         for url in entries where url.pathExtension == "json" {
             guard let data = try? Data(contentsOf: url),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -50,11 +57,14 @@ enum SessionActivityFeed {
             // Heartbeat gate first: anything not touched recently is dead, whatever its status says.
             guard now.timeIntervalSince(updated) <= liveWithin, status == "running" else { continue }
             let tool = (obj["tool_name"] as? String).map(prettyToolName) ?? "working"
-            running.append((tool, updated))
+            // started_at drives the elapsed-time UI. Old/partial state files predate it, so fall
+            // back to updated_at rather than dropping the session — the timer just starts from now.
+            let started = (obj["started_at"] as? String).flatMap(ISO8601.date(from:)) ?? updated
+            running.append((tool, updated, started))
         }
 
         guard let latest = running.max(by: { $0.updated < $1.updated }) else { return nil }
-        return SessionActivity(tool: latest.tool, runningCount: running.count)
+        return SessionActivity(tool: latest.tool, runningCount: running.count, startedAt: latest.started)
     }
 
     /// Common verb prefixes on MCP action names, stripped so the notch shows the noun that

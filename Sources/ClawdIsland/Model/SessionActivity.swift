@@ -8,4 +8,8 @@ struct SessionActivity: Equatable, Sendable {
     var tool: String
     /// How many sessions are running at this instant (fresh heartbeat + status == "running").
     var runningCount: Int
+    /// When the surfaced session's current tool run began — the hook's `started_at`, which
+    /// (unlike the heartbeat) is not re-stamped on every event. Drives the elapsed-time UI.
+    /// Falls back to `updated_at` when an old/partial state file carries no `started_at`.
+    var startedAt: Date
 }

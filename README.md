@@ -92,7 +92,7 @@ Then install the hooks once:
 bash scripts/install-hooks.sh
 ```
 
-That registers three async hooks (SessionStart, PreToolUse, Stop) in
+That registers four async hooks (SessionStart, PreToolUse, PostToolUse, Stop) in
 `~/.claude/settings.json`, all pointing at `Sources/ClawdIsland/Hooks/session-hook.sh`.
 The installer backs up any existing settings once to
 `settings.json.bak-clawdisland` and **merges** — hooks you've configured yourself are

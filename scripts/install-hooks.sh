@@ -2,7 +2,7 @@
 #
 # install-hooks.sh — register ClawdIsland's session observer with Claude Code.
 #
-# Adds three async hooks (SessionStart, PreToolUse, Stop) to ~/.claude/settings.json,
+# Adds four async hooks (SessionStart, PreToolUse, PostToolUse, Stop) to ~/.claude/settings.json,
 # all pointing at Sources/ClawdIsland/Hooks/session-hook.sh. Existing hooks the user
 # has configured are preserved — we merge, never overwrite. Safe to run repeatedly:
 # re-running replaces only our own entries instead of piling up duplicates.
@@ -57,8 +57,9 @@ fi
 # --- merge ------------------------------------------------------------------
 # For each event: drop any group that already references our hook script (so a
 # re-run doesn't duplicate), then append a fresh group. All other groups — the
-# user's own hooks — are left exactly as they are. PreToolUse carries no matcher,
-# which means it fires for every tool.
+# user's own hooks — are left exactly as they are. PreToolUse/PostToolUse carry no
+# matcher, which means they fire for every tool. PostToolUse is the heartbeat that
+# keeps a multi-tool turn continuously live (see session-hook.sh).
 updated="$(printf '%s' "$current" | jq \
   --arg cmd "$hook_cmd" '
   def ourgroup: {hooks: [{type: "command", command: $cmd, async: true}]};
@@ -66,6 +67,7 @@ updated="$(printf '%s' "$current" | jq \
   .hooks = (.hooks // {})
   | .hooks.SessionStart = ((.hooks.SessionStart // []) | notours) + [ourgroup]
   | .hooks.PreToolUse   = ((.hooks.PreToolUse   // []) | notours) + [ourgroup]
+  | .hooks.PostToolUse  = ((.hooks.PostToolUse  // []) | notours) + [ourgroup]
   | .hooks.Stop         = ((.hooks.Stop         // []) | notours) + [ourgroup]
 ')"
 

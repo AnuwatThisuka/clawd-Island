@@ -26,6 +26,7 @@ care about spread out into a proper dashboard.
 | **A mascot with options**  | Clawd walks around at idle; right-click to swap between the crab, a mono version, or the Claude spark                |
 | **Burn-rate ETA**          | Tap the ring to switch from "% used" to "runs out at this rate around 4:20pm"                                        |
 | **Threshold alerts**       | Native macOS notification when session or weekly usage first crosses 80% and 95% — no need to glance at the notch    |
+| **Opus vs Sonnet split**   | When your plan meters the 7-day limit per model, the tile shows both — "Opus 42% · Sonnet 88%" — not just the higher |
 | **Reacts to your pace**    | Clawd's walk speed actually reflects how fast you're burning through the session                                     |
 | **Nothing else on screen** | No menu-bar icon competing for space — the island is the interface, right-click for everything else                  |
 
@@ -84,8 +85,6 @@ Things planned or being considered, roughly ordered by how soon they'd land:
 
 **Next up**
 
-- [ ] Opus vs Sonnet breakdown — the weekly limit is already tracked separately per
-      model under the hood; surface both numbers instead of just the higher one
 - [ ] Per-project cost — break "tokens/cost today" down by project folder under
       `~/.claude`, not just a single daily total
 

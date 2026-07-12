@@ -7,7 +7,9 @@ import SQLite3
 struct ClaudeLimits: Sendable {
     var sessionPct: Double?      // 0…1 used (five_hour)
     var sessionResetsAt: Date?
-    var weeklyPct: Double?       // 0…1 used (seven_day)
+    var weeklyPct: Double?       // 0…1 used (seven_day, or the higher of the per-model splits)
+    var weeklyOpusPct: Double?   // 0…1 used (seven_day_opus), nil unless the source splits by model
+    var weeklySonnetPct: Double? // 0…1 used (seven_day_sonnet), nil unless the source splits by model
     var weeklyResetsAt: Date?
     var creditsPct: Double?      // 0…1 used (extra_usage), nil if no credits
     var source: String?          // where the session came from (e.g. "Brave")
@@ -98,15 +100,19 @@ actor ClaudeAPIService {
         }
         let (s, sr) = node("five_hour")
         var (w, wr) = node("seven_day")
-        if w == nil {   // /api/oauth/usage splits the 7-day limit by model
-            let (wo, wor) = node("seven_day_opus")
-            let (ws, wsr) = node("seven_day_sonnet")
-            w = [wo, ws].compactMap { $0 }.max()
-            wr = wor ?? wsr
+        let (opusUtil, opusReset) = node("seven_day_opus")
+        let (sonnetUtil, sonnetReset) = node("seven_day_sonnet")
+        var opus: Double?, sonnet: Double?
+        if w == nil {   // /api/oauth/usage splits the 7-day limit by model; surface both
+            opus = opusUtil; sonnet = sonnetUtil
+            w = [opusUtil, sonnetUtil].compactMap { $0 }.max()
+            wr = opusReset ?? sonnetReset
         }
+        // The combined seven_day source carries no per-model split → opus/sonnet stay nil.
         let (c, _) = node("extra_usage")
         return ClaudeLimits(sessionPct: s, sessionResetsAt: sr,
-                            weeklyPct: w, weeklyResetsAt: wr,
+                            weeklyPct: w, weeklyOpusPct: opus, weeklySonnetPct: sonnet,
+                            weeklyResetsAt: wr,
                             creditsPct: c, source: source, fetchedAt: Date())
     }
 

@@ -124,7 +124,8 @@ struct IslandView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { if model.etaToLimit != nil { prefReset.toggle() } }
                     .help(model.etaToLimit != nil ? "Click to switch reset / burn-rate" : "")
-                limitTile("7-Day", model.weeklyUsage, resets: model.weeklyResetsAt)
+                limitTile("7-Day", model.weeklyUsage, resets: model.weeklyResetsAt,
+                          breakdown: weeklyBreakdown)
                 tile("credits", model.limits?.creditsPct.map { Fmt.pct($0) + " used" } ?? "none", height: .compact)
                 tile("cost today", s.isEmpty ? "—" : Fmt.usd(s.costToday), height: .compact)
                 tile("tokens today", s.isEmpty ? "—" : Fmt.tokens(s.tokensToday), height: .compact)
@@ -149,9 +150,16 @@ struct IslandView: View {
         (model.planName ?? "Claude").replacingOccurrences(of: "Claude ", with: "")
     }
 
-    // A limit tile: label, big colour-coded %, and a "resets in …" subline.
+    /// "Opus 42% · Sonnet 88%" when the source splits the 7-day limit by model, else nil.
+    private var weeklyBreakdown: String? {
+        guard let o = model.weeklyOpusUsage, let s = model.weeklySonnetUsage else { return nil }
+        return "Opus \(Fmt.pct(o)) · Sonnet \(Fmt.pct(s))"
+    }
+
+    // A limit tile: label, big colour-coded %, a "resets in …" subline, and an optional
+    // per-model breakdown line (used by the 7-Day tile when Opus/Sonnet are tracked separately).
     private func limitTile(_ label: String, _ value: Double?, resets: Date?,
-                           eta: TimeInterval? = nil) -> some View {
+                           eta: TimeInterval? = nil, breakdown: String? = nil) -> some View {
         tileBox {
             Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
             Text(value.map(Fmt.pct) ?? "—")
@@ -164,6 +172,11 @@ struct IslandView: View {
             } else {
                 Text(resets.map { "resets in \(Fmt.until($0))" } ?? "resets —")
                     .font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+            }
+            if let breakdown {
+                Text(breakdown)
+                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.4))
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
     }

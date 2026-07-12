@@ -43,6 +43,8 @@ final class AppModel {
         limits?.sessionPct ?? statuslineUsage ?? (snapshot.isEmpty ? nil : snapshot.blockUsageEstimate)
     }
     var weeklyUsage: Double? { limits?.weeklyPct }
+    var weeklyOpusUsage: Double? { limits?.weeklyOpusPct }
+    var weeklySonnetUsage: Double? { limits?.weeklySonnetPct }
     var sessionResetsAt: Date? { limits?.sessionResetsAt }
     var weeklyResetsAt: Date? { limits?.weeklyResetsAt ?? weeklyResetFromConfig }
     var lastFetch: Date? { limits?.fetchedAt }

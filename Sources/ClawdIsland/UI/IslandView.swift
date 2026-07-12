@@ -89,9 +89,6 @@ struct IslandView: View {
         .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
 
-    /// Expand/collapse spring tuned for a Notchnook-like notch morph: quick response with a
-    /// subtle underdamped settle so the pill overshoots a hair then lands, instead of easing
-    /// in like a modal sheet.
     private static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
     // Right-click menu (replaces the menu-bar item).

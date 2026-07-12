@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 /// Top-anchors the pill inside the fixed full-width window, horizontally centered on the notch.
+/// The pill stays flush with the top screen edge in every state; only its height grows downward.
 struct IslandRootView: View {
     let model: AppModel
 
@@ -36,28 +37,48 @@ struct IslandView: View {
     private var closedWidth: CGFloat { wing + gap + wing + edgeInset * 2 }
     private var used: Double { model.sessionUsage ?? 0 }
 
+    /// A tool is running and the user hasn't click-opened the tile grid, so the pill auto-drops the
+    /// live-activity detail band. A manual expand (tile grid) takes precedence over it.
+    private var showActivityBand: Bool { model.activity != nil && !expanded }
+
+    /// How far the pill grows below the notch: the tile grid when click-opened, the activity band
+    /// when a tool runs, otherwise nothing (stays a closed pill).
+    private var contentDropHeight: CGFloat {
+        if expanded { return dropHeight }
+        if showActivityBand { return model.activityDropHeight }
+        return 0
+    }
+
     var body: some View {
+        let dropped = expanded || showActivityBand
         let shape = NotchShape(topRadius: 8,
-                               bottomRadius: expanded ? 22 : max(10, closedH * 0.40))
+                               bottomRadius: dropped ? 22 : max(10, closedH * 0.40))
         ZStack(alignment: .top) {
             shape.fill(Color.black)
             VStack(spacing: 0) {
                 notchRow.frame(width: closedWidth, height: closedH)
-                dropDown
-                    .frame(width: closedWidth, alignment: .top)   // natural height, measured below
-                    .background(dropHeightReader)
-                    .opacity(expanded ? 1 : 0)
+                if expanded {
+                    dropDown
+                        .frame(width: closedWidth, alignment: .top)   // natural height, measured below
+                        .background(dropHeightReader)
+                } else if let act = model.activity {
+                    ActivityDetailView(activity: act)
+                        .frame(width: closedWidth, alignment: .top)
+                        .background(activityHeightReader)
+                }
             }
         }
         .frame(width: closedWidth,
-               height: expanded ? closedH + dropHeight : closedH,
+               height: closedH + contentDropHeight,
                alignment: .top)
         .clipShape(shape)
         .contentShape(shape)
         .contextMenu { menu }
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
+        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: model.activityDropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
+        .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
 
     // Right-click menu (replaces the menu-bar item).
@@ -100,19 +121,33 @@ struct IslandView: View {
 
             Color.clear.frame(width: gap, height: closedH)
 
-            HStack(spacing: 5) {
-                Text(model.sessionUsage.map(Fmt.pct) ?? "—")
-                    .font(.system(size: 12, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(.white)
-                Ring(fraction: used, state: RingState(usage: used), lineWidth: 3)
-                    .frame(width: 14, height: 14)
+            Group {
+                // While a tool is running, the right wing shows the live elapsed timer (with the
+                // verb/subtitle detail dropping below the notch); otherwise the session-usage
+                // readout. Real-time status takes priority over the % when both exist.
+                if let act = model.activity {
+                    ActivityTimer(startedAt: act.startedAt)
+                } else {
+                    usageReadout
+                }
             }
             .frame(width: wing, height: closedH)
-            .opacity(model.isStale ? 0.5 : 1)          // dim when data isn't fresh
             .contentShape(Rectangle())
             .onTapGesture { model.isExpanded.toggle() }
         }
         .padding(.horizontal, edgeInset)
+    }
+
+    // Session-usage %, shown when Claude Code is idle.
+    private var usageReadout: some View {
+        HStack(spacing: 5) {
+            Text(model.sessionUsage.map(Fmt.pct) ?? "—")
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(.white)
+            Ring(fraction: used, state: RingState(usage: used), lineWidth: 3)
+                .frame(width: 14, height: 14)
+        }
+        .opacity(model.isStale ? 0.5 : 1)          // dim when data isn't fresh
     }
 
     // Reports the drop-down's natural laid-out height into the model, so the pill frame and the
@@ -121,6 +156,16 @@ struct IslandView: View {
         GeometryReader { geo in
             Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
                 if h > 0 { model.dropHeight = h }
+            }
+        }
+    }
+
+    // Same contract as `dropHeightReader`, but for the live-activity band — feeds its measured
+    // height into the model so the pill and click-catcher size to the real verb/subtitle content.
+    private var activityHeightReader: some View {
+        GeometryReader { geo in
+            Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
+                if h > 0 { model.activityDropHeight = h }
             }
         }
     }
@@ -253,9 +298,11 @@ private extension View {
     }
 }
 
-private extension Color {
+extension Color {
     /// Warn/critical accents for tile values and the stale-data notice. (The ring in
     /// `Ring.swift` uses its own, deliberately brighter palette and is left untouched.)
     static let tileAmber = Color(red: 0.96, green: 0.70, blue: 0.20)
     static let tileRed = Color(red: 0.92, green: 0.34, blue: 0.34)
+    /// Live-activity accent for the running-tool indicator dot.
+    static let tileGreen = Color(red: 0.36, green: 0.85, blue: 0.52)
 }

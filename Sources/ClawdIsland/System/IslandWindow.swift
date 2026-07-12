@@ -64,7 +64,16 @@ final class IslandWindow {
         let closedH = max(model.topInset, 30)
         let dropH = model.dropHeight                        // measured from the tile grid
         let zoneW = model.notchWidth + 56 * 2 + 24 + 24    // wing+gap+wing + edge insets + margin
-        let zoneH = (model.isExpanded ? closedH + dropH + 8 : closedH + 6)
+        // Footprint tracks whatever's dropped below the notch: the click-opened tile grid, or the
+        // auto-opened live-activity band when a tool runs. Both grow the hit region downward.
+        let zoneH: CGFloat
+        if model.isExpanded {
+            zoneH = closedH + dropH + 8
+        } else if model.activity != nil {
+            zoneH = closedH + model.activityDropHeight + 8
+        } else {
+            zoneH = closedH + 6
+        }
         let w = hosting.bounds.width
         let h = hosting.bounds.height
         hosting.interactiveRect = CGRect(x: (w - zoneW) / 2, y: h - zoneH, width: zoneW, height: zoneH)

@@ -35,6 +35,13 @@ enum Fmt {
     }
     static func usd(_ v: Double) -> String { String(format: "$%.2f", v) }
 
+    /// Elapsed time as "m:ss" for the live activity timer (e.g. 65s → "1:05").
+    /// Minutes aren't zero-padded (matches the reference's "0:05"); negatives clamp to "0:00".
+    static func elapsed(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        return "\(s / 60):\(String(format: "%02d", s % 60))"
+    }
+
     /// "default_claude_max_5x" -> "Claude Max 5x"; "default_claude_ai" -> "Claude Free".
     static func planLabel(_ raw: String) -> String {
         // Explicit labels for every tier we've actually observed from

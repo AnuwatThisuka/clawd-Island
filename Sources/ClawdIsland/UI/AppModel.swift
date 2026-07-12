@@ -17,9 +17,9 @@ final class AppModel {
     var notchWidth: CGFloat = 190
     var topInset: CGFloat = 32
     /// Measured natural height of the expanded drop-down content. Written by IslandView once
-    /// the tile grid lays out, read by IslandWindow to size the click-catcher. Starts at a
-    /// sensible estimate so the very first expand isn't clipped before the measurement lands.
-    var dropHeight: CGFloat = 198
+    /// the Usage Monitor panel lays out, read by IslandWindow to size the click-catcher. Starts
+    /// at a sensible estimate so the very first expand isn't clipped before the measurement lands.
+    var dropHeight: CGFloat = 250
     /// Measured natural height of the live-activity detail band (verb + subtitle) shown below the
     /// notch while a tool runs. Same read/write contract as `dropHeight`, but for the auto-opened
     /// active state rather than the click-opened tile grid. Seeded so the first frame isn't clipped.

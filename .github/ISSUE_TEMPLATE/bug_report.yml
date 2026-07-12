@@ -1,0 +1,62 @@
+name: Bug Report
+description: Something in Clawd Island is broken or misbehaving.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report! Please fill out the details below.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: The island shows … but I expected …
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch the app
+        2. Run a Claude session
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Clawd Island version
+      description: See the About / menu, or the release tag you installed.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "14.5 (Sonoma)"
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac hardware
+      placeholder: MacBook Pro M3 / Intel
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Console output or screenshots. No secrets/API keys.
+      render: shell
+    validations:
+      required: false

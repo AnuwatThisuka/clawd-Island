@@ -20,6 +20,10 @@ final class AppModel {
     /// the tile grid lays out, read by IslandWindow to size the click-catcher. Starts at a
     /// sensible estimate so the very first expand isn't clipped before the measurement lands.
     var dropHeight: CGFloat = 198
+    /// Measured natural height of the live-activity detail band (verb + subtitle) shown below the
+    /// notch while a tool runs. Same read/write contract as `dropHeight`, but for the auto-opened
+    /// active state rather than the click-opened tile grid. Seeded so the first frame isn't clipped.
+    var activityDropHeight: CGFloat = 46
 
     /// Live account limits from claude.ai (authoritative, matches Claude Desktop).
     private(set) var limits: ClaudeLimits?

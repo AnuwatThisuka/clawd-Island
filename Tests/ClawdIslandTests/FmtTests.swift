@@ -18,6 +18,20 @@ import Foundation
         #expect(Fmt.planLabel("default_claude_ai") != "Claude Ai")
     }
 
+    // Activity timer formatter: "m:ss", minutes unpadded, seconds zero-padded.
+    @Test func elapsedFormatsMinuteSecond() {
+        #expect(Fmt.elapsed(0) == "0:00")
+        #expect(Fmt.elapsed(5) == "0:05")
+        #expect(Fmt.elapsed(65) == "1:05")
+        #expect(Fmt.elapsed(600) == "10:00")
+        #expect(Fmt.elapsed(3661) == "61:01")   // no hour rollover — m:ss only
+    }
+
+    // Negative elapsed (clock skew / startedAt in the future) clamps, never shows a "-".
+    @Test func elapsedClampsNegative() {
+        #expect(Fmt.elapsed(-3) == "0:00")
+    }
+
     // Unknown/future tiers fall back to something sensible, not a raw token.
     @Test func planLabelUnknownFallback() {
         // Future Max multiplier keeps the "Claude Max Nx" shape.

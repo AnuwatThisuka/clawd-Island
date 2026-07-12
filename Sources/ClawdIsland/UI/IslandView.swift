@@ -2,18 +2,13 @@ import SwiftUI
 import AppKit
 
 /// Top-anchors the pill inside the fixed full-width window, horizontally centered on the notch.
-/// While a tool is running the pill drops by `IslandView.activeStateTopGap` so it detaches from the
-/// physical notch and floats (Phase C). Idle — % + ring, or the clicked-open tile grid — stays flush.
+/// The pill stays flush with the top screen edge in every state; only its height grows downward.
 struct IslandRootView: View {
     let model: AppModel
-
-    private var active: Bool { model.activity != nil }
 
     var body: some View {
         VStack(spacing: 0) {
             IslandView(model: model, notchWidth: model.notchWidth, topInset: model.topInset)
-                .padding(.top, active ? IslandView.activeStateTopGap : 0)
-                .animation(.easeInOut(duration: 0.25), value: active)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -30,18 +25,10 @@ struct IslandView: View {
 
     /// 5-Hour tile: false = show burn-rate ETA when available, true = always show reset.
     @State private var prefReset = false
-    /// Drives the pulsing activity dot shown while Claude Code is running a tool.
-    @State private var pulse = false
 
     private let wing: CGFloat = 56
     private let iconSize: CGFloat = 18
     private let edgeInset: CGFloat = 12   // keeps content off the pill's flared edges
-
-    /// Gap between the screen's top edge and the pill while a tool is running, so the active status
-    /// detaches from the physical notch and floats (Phase C). Applied in `IslandRootView`; the
-    /// window's click-catcher (`IslandWindow.updateInteractiveZone`) shifts down by the same amount.
-    /// Idle and clicked-open states stay flush (gap = 0), matching the shipped look.
-    static let activeStateTopGap: CGFloat = 12
 
     private var expanded: Bool { model.isExpanded }
     private var dropHeight: CGFloat { model.dropHeight }   // measured from the tile grid
@@ -50,27 +37,46 @@ struct IslandView: View {
     private var closedWidth: CGFloat { wing + gap + wing + edgeInset * 2 }
     private var used: Double { model.sessionUsage ?? 0 }
 
+    /// A tool is running and the user hasn't click-opened the tile grid, so the pill auto-drops the
+    /// live-activity detail band. A manual expand (tile grid) takes precedence over it.
+    private var showActivityBand: Bool { model.activity != nil && !expanded }
+
+    /// How far the pill grows below the notch: the tile grid when click-opened, the activity band
+    /// when a tool runs, otherwise nothing (stays a closed pill).
+    private var contentDropHeight: CGFloat {
+        if expanded { return dropHeight }
+        if showActivityBand { return model.activityDropHeight }
+        return 0
+    }
+
     var body: some View {
+        let dropped = expanded || showActivityBand
         let shape = NotchShape(topRadius: 8,
-                               bottomRadius: expanded ? 22 : max(10, closedH * 0.40))
+                               bottomRadius: dropped ? 22 : max(10, closedH * 0.40))
         ZStack(alignment: .top) {
             shape.fill(Color.black)
             VStack(spacing: 0) {
                 notchRow.frame(width: closedWidth, height: closedH)
-                dropDown
-                    .frame(width: closedWidth, alignment: .top)   // natural height, measured below
-                    .background(dropHeightReader)
-                    .opacity(expanded ? 1 : 0)
+                if expanded {
+                    dropDown
+                        .frame(width: closedWidth, alignment: .top)   // natural height, measured below
+                        .background(dropHeightReader)
+                } else if let act = model.activity {
+                    ActivityDetailView(activity: act)
+                        .frame(width: closedWidth, alignment: .top)
+                        .background(activityHeightReader)
+                }
             }
         }
         .frame(width: closedWidth,
-               height: expanded ? closedH + dropHeight : closedH,
+               height: closedH + contentDropHeight,
                alignment: .top)
         .clipShape(shape)
         .contentShape(shape)
         .contextMenu { menu }
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
         .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
+        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: model.activityDropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
         .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
@@ -116,10 +122,11 @@ struct IslandView: View {
             Color.clear.frame(width: gap, height: closedH)
 
             Group {
-                // While a tool is running, the right wing shows the live tool name; otherwise the
-                // session-usage readout. Real-time status takes priority over the % when both exist.
+                // While a tool is running, the right wing shows the live elapsed timer (with the
+                // verb/subtitle detail dropping below the notch); otherwise the session-usage
+                // readout. Real-time status takes priority over the % when both exist.
                 if let act = model.activity {
-                    activityReadout(act)
+                    ActivityTimer(startedAt: act.startedAt)
                 } else {
                     usageReadout
                 }
@@ -143,31 +150,22 @@ struct IslandView: View {
         .opacity(model.isStale ? 0.5 : 1)          // dim when data isn't fresh
     }
 
-    // Live tool status: a pulsing dot plus the running tool's name (with a "+N" badge when more
-    // than one session is active). Text scales down before it clips in the narrow wing.
-    private func activityReadout(_ act: SessionActivity) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(Color.tileGreen)
-                .frame(width: 6, height: 6)
-                .opacity(pulse ? 1 : 0.35)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                        pulse = true
-                    }
-                }
-            Text(act.runningCount > 1 ? "\(act.tool) +\(act.runningCount - 1)" : act.tool)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white)
-                .lineLimit(1).truncationMode(.tail).minimumScaleFactor(0.6)
-        }
-    }
-
     // Reports the drop-down's natural laid-out height into the model, so the pill frame and the
     // window's click-catcher both track the real content instead of a hard-coded constant.
     private var dropHeightReader: some View {
         GeometryReader { geo in
             Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
                 if h > 0 { model.dropHeight = h }
+            }
+        }
+    }
+
+    // Same contract as `dropHeightReader`, but for the live-activity band — feeds its measured
+    // height into the model so the pill and click-catcher size to the real verb/subtitle content.
+    private var activityHeightReader: some View {
+        GeometryReader { geo in
+            Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
+                if h > 0 { model.activityDropHeight = h }
             }
         }
     }
@@ -300,7 +298,7 @@ private extension View {
     }
 }
 
-private extension Color {
+extension Color {
     /// Warn/critical accents for tile values and the stale-data notice. (The ring in
     /// `Ring.swift` uses its own, deliberately brighter palette and is left untouched.)
     static let tileAmber = Color(red: 0.96, green: 0.70, blue: 0.20)

@@ -7,8 +7,8 @@ enum AvatarFrames {
     // `[NSImage]` is not Sendable. Newer local Swift flags it as unnecessary — that warning is
     // expected and must be left in place so CI stays green. These arrays are decoded once and
     // never mutated, so the "unsafe" opt-out is sound.
-    nonisolated(unsafe) static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
-    nonisolated(unsafe) static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
+    static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
+    static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
 
     private static func decode(_ b64s: [String]) -> [NSImage] {
         b64s.compactMap { Data(base64Encoded: $0).flatMap(NSImage.init(data:)) }

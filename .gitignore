@@ -1,9 +1,25 @@
+# macOS
 .DS_Store
+
+# Swift Package Manager
 .build/
-dist/
+.swiftpm/
+
+# Xcode
 *.xcodeproj
 DerivedData/
-docs/superpowers/
-private-key-file.txt
+*.xcuserstate
+xcuserdata/
 
+# Build output
+dist/
+
+# Docs
+docs/superpowers/
+
+# Secrets
+private-key-file.txt
+*.pem
+
+# Editors
 .vscode/

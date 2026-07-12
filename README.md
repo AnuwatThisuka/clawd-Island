@@ -25,6 +25,7 @@ care about spread out into a proper dashboard.
 | **Local cost tracking**    | Today's spend and token count are computed straight from your `~/.claude` logs, no network call needed for that part |
 | **A mascot with options**  | Clawd walks around at idle; right-click to swap between the crab, a mono version, or the Claude spark                |
 | **Burn-rate ETA**          | Tap the ring to switch from "% used" to "runs out at this rate around 4:20pm"                                        |
+| **Threshold alerts**       | Native macOS notification when session or weekly usage first crosses 80% and 95% — no need to glance at the notch    |
 | **Reacts to your pace**    | Clawd's walk speed actually reflects how fast you're burning through the session                                     |
 | **Nothing else on screen** | No menu-bar icon competing for space — the island is the interface, right-click for everything else                  |
 
@@ -75,7 +76,7 @@ again every time you relaunch. Right-click the island afterward and turn on
 
 - Click the ring to open, click anywhere else to close it
 - Click Clawd to cycle mascots
-- Right-click for icon settings, pause, login item, and quit
+- Right-click for icon settings, pause, threshold alerts, login item, and quit
 
 ## Roadmap
 
@@ -83,8 +84,6 @@ Things planned or being considered, roughly ordered by how soon they'd land:
 
 **Next up**
 
-- [ ] Threshold notifications — a native macOS notification at, say, 80% and 95% of
-      session/weekly usage, instead of having to glance at the notch
 - [ ] Opus vs Sonnet breakdown — the weekly limit is already tracked separately per
       model under the hood; surface both numbers instead of just the higher one
 - [ ] Per-project cost — break "tokens/cost today" down by project folder under

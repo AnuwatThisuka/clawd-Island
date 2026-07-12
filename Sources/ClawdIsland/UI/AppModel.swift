@@ -28,6 +28,7 @@ final class AppModel {
     private let store = UsageStore()
     private let loader = LogLoader()
     private let claudeAPI = ClaudeAPIService()
+    let notifier = NotificationManager()
     private var watcher: LogWatcher?
     private var ticker: Timer?
     private var limitsTimer: Timer?
@@ -129,7 +130,11 @@ final class AppModel {
             pctHistory.append((Date(), p))
             if pctHistory.count > 20 { pctHistory.removeFirst(pctHistory.count - 20) }
         }
+        notifier.evaluate(session: l.sessionPct, sessionResetsAt: l.sessionResetsAt,
+                          weekly: l.weeklyPct, weeklyResetsAt: l.weeklyResetsAt)
     }
+
+    func toggleNotifications() { notifier.isEnabled.toggle() }
 
     private func ingest(_ files: [URL]) async {
         let parsed = await loader.parse(files)

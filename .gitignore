@@ -5,3 +5,5 @@ dist/
 DerivedData/
 docs/superpowers/
 private-key-file.txt
+
+.vscode/

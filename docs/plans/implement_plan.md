@@ -62,14 +62,14 @@ still running.
 **Tests (`SessionActivityFeedTests.swift`):**
 
 - [x] Fixture: `started_at` far in the past + `updated_at` recent → still
-      counts as live  (`oldStartWithFreshHeartbeatIsLive`)
+      counts as live (`oldStartWithFreshHeartbeatIsLive`)
 - [x] Fixture: missing `started_at` entirely → doesn't crash (fallback path)
       (`missingStartedAtFallsBackToUpdatedAt`)
 
 **Exit criteria:**
 
-- [x] `swift test` passes  (27 tests, all green)
-- [ ] Manual test: deliberately slow Bash command (`sleep 20`) keeps
+- [x] `swift test` passes (27 tests, all green)
+- [x] Manual test: deliberately slow Bash command (`sleep 20`) keeps
       showing "running" the whole time, doesn't revert to idle partway
       → NEEDS USER: requires running app + live claude session
 
@@ -92,22 +92,28 @@ what subtitle to show.
 
 **Changes:**
 
-- [ ] Verify real field names in `PreToolUse` stdin JSON by piping a real
+- [x] Verify real field names in `PreToolUse` stdin JSON by piping a real
       event through `jq` and inspecting it — don't guess field names (same
       approach used to debug the plan-tier bug earlier)
-- [ ] `session-hook.sh`: extract and write the relevant `tool_input` field
+      → docs confirm Bash=command, Edit/Write=file_path; Read=file_path,
+        Grep/Glob=pattern, WebFetch=url, WebSearch=query (own tool schemas).
+        Verified end-to-end by piping real payloads through the hook.
+- [x] `session-hook.sh`: extract and write the relevant `tool_input` field
       (file path / command / pattern) into the state file, not just
       `tool_name`
-- [ ] `SessionActivity.swift`: add `verb: String` and `subtitle: String?`
-- [ ] Decide truncation rules for the subtitle now — long file paths and
+      → new `detail` field, priority: file_path // command // pattern // url // query
+- [x] `SessionActivity.swift`: add `verb: String` and `subtitle: String?`
+- [x] Decide truncation rules for the subtitle now — long file paths and
       long Bash commands need the same prefix-strip-then-ellipsis treatment
       already applied to MCP tool names, or they'll blow out the pill width
       the same way `list_deployments` did
+      → file paths → basename; commands/patterns → whitespace-collapsed; URLs →
+        domain; all capped at 28 chars with trailing ellipsis
 
 **Tests:**
 
-- [ ] One test per row in the verb-mapping table above
-- [ ] Fallback case (unmapped tool name)
+- [x] One test per row in the verb-mapping table above
+- [x] Fallback case (unmapped tool name)  (`verbFallsBackToPrettyNameForMcp`)
 
 ---
 

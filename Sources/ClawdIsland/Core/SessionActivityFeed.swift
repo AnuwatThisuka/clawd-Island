@@ -47,7 +47,7 @@ enum SessionActivityFeed {
         guard let entries = try? fm.contentsOfDirectory(at: dir,
                                                         includingPropertiesForKeys: nil) else { return nil }
 
-        var running: [(tool: String, updated: Date, started: Date)] = []
+        var running: [(tool: String, verb: String, subtitle: String?, updated: Date, started: Date)] = []
         for url in entries where url.pathExtension == "json" {
             guard let data = try? Data(contentsOf: url),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -56,15 +56,20 @@ enum SessionActivityFeed {
                   let updated = ISO8601.date(from: iso) else { continue }
             // Heartbeat gate first: anything not touched recently is dead, whatever its status says.
             guard now.timeIntervalSince(updated) <= liveWithin, status == "running" else { continue }
-            let tool = (obj["tool_name"] as? String).map(prettyToolName) ?? "working"
+            let rawTool = obj["tool_name"] as? String
+            let detail = obj["detail"] as? String
+            let tool = rawTool.map(prettyToolName) ?? "working"
+            let toolVerb = rawTool.map(verb(forTool:)) ?? "working"
+            let toolSubtitle = rawTool.flatMap { subtitle(forTool: $0, detail: detail) }
             // started_at drives the elapsed-time UI. Old/partial state files predate it, so fall
             // back to updated_at rather than dropping the session — the timer just starts from now.
             let started = (obj["started_at"] as? String).flatMap(ISO8601.date(from:)) ?? updated
-            running.append((tool, updated, started))
+            running.append((tool, toolVerb, toolSubtitle, updated, started))
         }
 
         guard let latest = running.max(by: { $0.updated < $1.updated }) else { return nil }
-        return SessionActivity(tool: latest.tool, runningCount: running.count, startedAt: latest.started)
+        return SessionActivity(tool: latest.tool, verb: latest.verb, subtitle: latest.subtitle,
+                               runningCount: running.count, startedAt: latest.started)
     }
 
     /// Common verb prefixes on MCP action names, stripped so the notch shows the noun that
@@ -84,5 +89,72 @@ enum SessionActivityFeed {
             if !stripped.isEmpty { return stripped }   // keep the verb if nothing would remain
         }
         return action
+    }
+
+    // MARK: verb + subtitle mapping
+
+    /// Longest a subtitle may be before it's ellipsised. Sized to the notch wing so a long file
+    /// path or Bash command can't blow out the pill the way `list_deployments` once did.
+    static let subtitleMaxLength = 28
+
+    /// Map a raw tool name to a present-participle verb for the activity headline. Known first-party
+    /// tools get a hand-picked verb; anything else (MCP tools, future tools) falls back to
+    /// `prettyToolName`, so `mcp__railway__list_deployments` still reads as "deployments".
+    static func verb(forTool raw: String) -> String {
+        switch raw {
+        case "Edit", "MultiEdit", "Write": return "Editing"
+        case "Read":                        return "Reading"
+        case "Bash":                        return "Running"
+        case "Grep", "Glob":                return "Searching"
+        case "WebFetch", "WebSearch":       return "Researching"
+        default:                            return prettyToolName(raw)
+        }
+    }
+
+    /// Derive the display subtitle from the raw tool name and its salient argument (`detail`, the
+    /// hook-forwarded tool_input field). File paths collapse to a basename; commands and patterns
+    /// are whitespace-normalised; URLs collapse to their domain. Everything is length-capped.
+    /// Returns nil when there's nothing useful to show (no detail, or an unmapped tool whose verb
+    /// already names the action).
+    static func subtitle(forTool raw: String, detail: String?) -> String? {
+        guard let detail, case let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        switch raw {
+        case "Edit", "MultiEdit", "Write", "Read":
+            return truncate(basename(trimmed))
+        case "Bash":
+            return truncate(collapseWhitespace(trimmed))
+        case "Grep", "Glob", "WebSearch":
+            return truncate(collapseWhitespace(trimmed))
+        case "WebFetch":
+            return truncate(domain(trimmed) ?? trimmed)
+        default:
+            return nil   // MCP/unmapped: the verb already carries the action name
+        }
+    }
+
+    /// Last path component, e.g. `/a/b/sidebar.tsx` → `sidebar.tsx`. Falls back to the whole
+    /// string if there's no trailing component (e.g. a path ending in `/`).
+    private static func basename(_ path: String) -> String {
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? path : name
+    }
+
+    /// Host of a URL, minus a leading `www.`, e.g. `https://www.example.com/x` → `example.com`.
+    private static func domain(_ raw: String) -> String? {
+        guard let host = URL(string: raw)?.host else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    /// Fold any run of whitespace (including newlines in a multi-line Bash command) into a single
+    /// space so the subtitle stays one tidy line.
+    private static func collapseWhitespace(_ s: String) -> String {
+        s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
+    /// Cap at `subtitleMaxLength`, replacing the tail with an ellipsis. The `…` counts toward the
+    /// limit so the result never exceeds it.
+    private static func truncate(_ s: String) -> String {
+        s.count <= subtitleMaxLength ? s : String(s.prefix(subtitleMaxLength - 1)) + "…"
     }
 }

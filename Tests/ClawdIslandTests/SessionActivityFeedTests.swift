@@ -33,13 +33,71 @@ import Foundation
         #expect(SessionActivityFeed.prettyToolName("mcp__x__list_") == "list_")
     }
 
+    // MARK: verb + subtitle mapping (one case per row of the Phase B table)
+
+    @Test func verbEditingForEditFamily() {
+        for tool in ["Edit", "MultiEdit", "Write"] {
+            #expect(SessionActivityFeed.verb(forTool: tool) == "Editing")
+        }
+        let sub = SessionActivityFeed.subtitle(forTool: "Edit", detail: "/Users/x/proj/src/sidebar.tsx")
+        #expect(sub == "sidebar.tsx")   // basename, not the whole path
+    }
+
+    @Test func verbReadingForRead() {
+        #expect(SessionActivityFeed.verb(forTool: "Read") == "Reading")
+        #expect(SessionActivityFeed.subtitle(forTool: "Read", detail: "/a/b/Package.swift") == "Package.swift")
+    }
+
+    @Test func verbRunningForBash() {
+        #expect(SessionActivityFeed.verb(forTool: "Bash") == "Running")
+        // multi-line command collapses to one line
+        #expect(SessionActivityFeed.subtitle(forTool: "Bash", detail: "swift\n  build") == "swift build")
+    }
+
+    @Test func verbSearchingForGrepGlob() {
+        #expect(SessionActivityFeed.verb(forTool: "Grep") == "Searching")
+        #expect(SessionActivityFeed.verb(forTool: "Glob") == "Searching")
+        #expect(SessionActivityFeed.subtitle(forTool: "Grep", detail: "liveWithin") == "liveWithin")
+    }
+
+    @Test func verbResearchingForWeb() {
+        #expect(SessionActivityFeed.verb(forTool: "WebFetch") == "Researching")
+        #expect(SessionActivityFeed.verb(forTool: "WebSearch") == "Researching")
+        // URL collapses to its domain, minus www.
+        #expect(SessionActivityFeed.subtitle(forTool: "WebFetch",
+                                             detail: "https://www.example.com/docs/x") == "example.com")
+        #expect(SessionActivityFeed.subtitle(forTool: "WebSearch",
+                                             detail: "swift concurrency") == "swift concurrency")
+    }
+
+    @Test func verbFallsBackToPrettyNameForMcp() {
+        // Unmapped/MCP tool: verb reuses prettyToolName, subtitle is nil (verb already names it).
+        #expect(SessionActivityFeed.verb(forTool: "mcp__railway__list_deployments") == "deployments")
+        #expect(SessionActivityFeed.subtitle(forTool: "mcp__railway__list_deployments", detail: nil) == nil)
+        #expect(SessionActivityFeed.subtitle(forTool: "mcp__railway__list_deployments",
+                                             detail: "something") == nil)
+    }
+
+    @Test func subtitleNilWhenNoDetail() {
+        #expect(SessionActivityFeed.subtitle(forTool: "Bash", detail: nil) == nil)
+        #expect(SessionActivityFeed.subtitle(forTool: "Bash", detail: "   ") == nil)  // whitespace only
+    }
+
+    @Test func subtitleTruncatesLongValues() {
+        let long = String(repeating: "x", count: 60)
+        let out = try! #require(SessionActivityFeed.subtitle(forTool: "Bash", detail: long))
+        #expect(out.count == SessionActivityFeed.subtitleMaxLength)  // capped, ellipsis included
+        #expect(out.hasSuffix("…"))
+    }
+
     // MARK: read() over a fixture dir
 
     /// Writes a state file into a temp dir. `age` is how long ago `updated_at` was stamped;
     /// `startedAge`, when given, stamps a separate `started_at` that far in the past — mirroring
     /// the hook's split fields (a run that began long ago but is still heartbeating).
     private func writeState(_ dir: URL, id: String, status: String, tool: String?,
-                            age: TimeInterval, now: Date, startedAge: TimeInterval? = nil) throws {
+                            age: TimeInterval, now: Date, startedAge: TimeInterval? = nil,
+                            detail: String? = nil) throws {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime]
         var obj: [String: Any] = [
@@ -48,6 +106,7 @@ import Foundation
             "updated_at": iso.string(from: now.addingTimeInterval(-age)),
         ]
         if let tool { obj["tool_name"] = tool }
+        if let detail { obj["detail"] = detail }
         if let startedAge { obj["started_at"] = iso.string(from: now.addingTimeInterval(-startedAge)) }
         let data = try JSONSerialization.data(withJSONObject: obj)
         try data.write(to: dir.appendingPathComponent("\(id).json"))
@@ -74,6 +133,19 @@ import Foundation
         let act = SessionActivityFeed.read(now: now, from: dir)
         #expect(act?.tool == "Bash")
         #expect(act?.runningCount == 1)
+    }
+
+    // End-to-end: a running Edit with a file_path detail surfaces verb "Editing" + basename subtitle.
+    @Test func readSurfacesVerbAndSubtitle() throws {
+        let now = Date()
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try writeState(dir, id: "s1", status: "running", tool: "Edit", age: 1, now: now,
+                       detail: "/Users/x/proj/IslandView.swift")
+        let act = SessionActivityFeed.read(now: now, from: dir)
+        #expect(act?.verb == "Editing")
+        #expect(act?.subtitle == "IslandView.swift")
+        #expect(act?.tool == "Edit")   // legacy field still populated
     }
 
     @Test func idleSessionIsNotActivity() throws {

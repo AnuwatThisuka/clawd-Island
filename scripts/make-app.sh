@@ -37,6 +37,7 @@ mkdir -p "$APPDIR/Contents/MacOS" "$APPDIR/Contents/Resources" "$APPDIR/Contents
 cp "$BIN" "$APPDIR/Contents/MacOS/ClawdIsland"
 cp "$ROOT/Resources/Info.plist" "$APPDIR/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APPDIR/Contents/Resources/AppIcon.icns"
+cp "$ROOT/LICENSE" "$APPDIR/Contents/Resources/LICENSE"
 
 # Embed Sparkle.framework (SwiftPM builds it as an xcframework) + let the binary find it.
 SPARKLE_FW="$(find "$ROOT/.build/artifacts" -path "*macos-arm64_x86_64/Sparkle.framework" -type d 2>/dev/null | head -1)"

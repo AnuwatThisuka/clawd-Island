@@ -10,15 +10,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  build-test:
-    name: Build & Test
+  build:
+    name: Build & Test (macOS)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+      - uses: actions/checkout@v7
 
       - name: Swift version
         run: swift --version
@@ -31,8 +31,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      - name: Build
+      - name: Build (debug)
         run: swift build -v
 
       - name: Test
         run: swift test -v
+
+      - name: Assemble app bundle (release)
+        run: bash scripts/make-app.sh
+
+      - name: Sanity-check the bundle
+        run: |
+          test -x "dist/Clawd Island.app/Contents/MacOS/ClawdIsland"
+          plutil -lint "dist/Clawd Island.app/Contents/Info.plist"
+          # make-app.sh bundles LICENSE into Resources — it must always be present.
+          test -f "dist/Clawd Island.app/Contents/Resources/LICENSE"
+
+      - name: Smoke-test the hook script
+        run: |
+          # session-hook.sh must never fail or hang, even on garbage input —
+          # this is a hard requirement (async hooks that error can stall Claude Code)
+          echo 'not json' | bash Sources/ClawdIsland/Hooks/session-hook.sh
+          echo '{}' | bash Sources/ClawdIsland/Hooks/session-hook.sh
+          echo '' | bash Sources/ClawdIsland/Hooks/session-hook.sh
+          echo '{"session_id":"ci-test","hook_event_name":"SessionStart"}' | \
+            bash Sources/ClawdIsland/Hooks/session-hook.sh
+          echo "hook smoke test passed (all inputs exited 0)"
+
+  scripts:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: ShellCheck
+        run: shellcheck -S warning scripts/*.sh Sources/ClawdIsland/Hooks/*.sh

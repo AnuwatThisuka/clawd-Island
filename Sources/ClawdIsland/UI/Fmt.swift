@@ -68,4 +68,15 @@ enum Fmt {
         }
         return "Claude " + s.replacingOccurrences(of: "_", with: " ").capitalized
     }
+
+    /// "claude_pro" -> "Pro"; "claude_team" -> "Team"; "individual" -> "Individual"; "unknown" -> "Unknown".
+    static func organizationTypeLabel(_ raw: String) -> String {
+        let known: [String: String] = [
+            "claude_pro": "Pro",
+            "claude_team": "Team",
+            "individual": "Individual",
+            "unknown": "Unknown",
+        ]
+        return known[raw] ?? raw
+    }
 }

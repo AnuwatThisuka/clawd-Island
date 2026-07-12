@@ -31,6 +31,7 @@ final class AppModel {
     private(set) var contextRemaining: Double?
     /// Friendly plan name, e.g. "Claude Max 5x" (from ~/.claude.json).
     private(set) var planName: String?
+    private(set) var organizationType: String?
     private var statuslineUsage: Double?
     private var weeklyResetFromConfig: Date?
     /// Recent (time, session %) samples for the burn-rate ETA.
@@ -223,8 +224,10 @@ final class AppModel {
             weeklyResetFromConfig = ISO8601DateFormatter().date(from: iso)
         }
         if let oauth = root["oauthAccount"] as? [String: Any],
+           let type = oauth["organizationType"] as? String,
            let tier = oauth["organizationRateLimitTier"] as? String {
-            planName = Fmt.planLabel(tier)
+            // planName = Fmt.planLabel(tier)
+            planName = Fmt.organizationTypeLabel(type)
         }
     }
 }

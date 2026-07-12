@@ -244,7 +244,7 @@ struct IslandView: View {
         return "Opus \(Fmt.pct(o)) · Sonnet \(Fmt.pct(s))"
     }
 
-    /// Compact status pill under the notch — red accent matches the reference card.
+    /// Compact status pill under the notch — accent tracks overall urgency via the ring palette.
     private var statusRow: some View {
         HStack {
             HStack(spacing: 6) {
@@ -271,9 +271,12 @@ struct IslandView: View {
     }
 
     private var statusColor: Color {
-        if model.isStale { return .tileAmber }
-        return .tileRed
+        if model.isStale { return RingState.warn.color }
+        return RingState(usage: model.iconUrgency).color
     }
+
+    /// Session-ring accent used for decorative stats icons (not usage-gated themselves).
+    private var accentColor: Color { RingState(usage: used).color }
 
     private var divider: some View {
         Rectangle()
@@ -287,7 +290,7 @@ struct IslandView: View {
                           resets: Date?, eta: TimeInterval? = nil,
                           breakdown: String? = nil) -> some View {
         let frac = value ?? 0
-        let color = barColor(frac)
+        let color = RingState(usage: frac).color
         return HStack(spacing: 12) {
             iconBox(icon, color: color)
 
@@ -300,7 +303,7 @@ struct IslandView: View {
                         if let eta {
                             Text("~\(Fmt.dur(eta)) to limit")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(Color.tileAmber)
+                                .foregroundStyle(RingState.warn.color)
                                 .lineLimit(1)
                         } else {
                             Text(resets.map { "resets in \(Fmt.until($0))" } ?? "resets —")
@@ -360,7 +363,7 @@ struct IslandView: View {
             HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.tileRed)
+                    .foregroundStyle(accentColor)
                 Text(label)
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.45))
@@ -393,23 +396,11 @@ struct IslandView: View {
             Text(model.usageSource)
         }
         .font(.system(size: 10))
-        .foregroundStyle(model.isStale ? Color.tileAmber : .white.opacity(0.4))
-    }
-
-    private func barColor(_ used: Double) -> Color {
-        switch RingState(usage: used) {
-        case .ok: return .tileRed          // brand accent (matches the reference card)
-        case .warn: return .tileAmber
-        case .critical: return .tileRed
-        }
+        .foregroundStyle(model.isStale ? RingState.warn.color : .white.opacity(0.4))
     }
 }
 
 extension Color {
-    /// Warn/critical accents for monitor values and the stale-data notice. (The ring in
-    /// `Ring.swift` uses its own, deliberately brighter palette and is left untouched.)
-    static let tileAmber = Color(red: 0.96, green: 0.70, blue: 0.20)
-    static let tileRed = Color(red: 0.92, green: 0.34, blue: 0.34)
-    /// Live-activity accent for the running-tool indicator dot.
+    /// Live-activity accent for the running-tool indicator underline.
     static let tileGreen = Color(red: 0.36, green: 0.85, blue: 0.52)
 }

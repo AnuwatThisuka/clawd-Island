@@ -3,8 +3,8 @@ import AppKit
 
 /// Decodes the bundled base64 PNG animation frames (MIT, see Assets/*.swift headers).
 enum AvatarFrames {
-    static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
-    static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
+    nonisolated(unsafe) static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
+    nonisolated(unsafe) static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
 
     private static func decode(_ b64s: [String]) -> [NSImage] {
         b64s.compactMap { Data(base64Encoded: $0).flatMap(NSImage.init(data:)) }

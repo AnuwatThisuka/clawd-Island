@@ -4,11 +4,16 @@ import AppKit
 /// Decodes the bundled base64 PNG animation frames (MIT, see Assets/*.swift headers).
 enum AvatarFrames {
     // `nonisolated(unsafe)` is REQUIRED under the CI toolchain (Xcode 16 / Swift 6.0), where
-    // `[NSImage]` is not Sendable. Newer local Swift flags it as unnecessary — that warning is
-    // expected and must be left in place so CI stays green. These arrays are decoded once and
-    // never mutated, so the "unsafe" opt-out is sound.
+    // `[NSImage]` is not Sendable. Swift 6.1+ makes `[NSImage]` Sendable and flags the opt-out as
+    // unnecessary, so it is compiled out there. These arrays are decoded once and never mutated,
+    // so the "unsafe" opt-out is sound where it is needed.
+    #if compiler(>=6.1)
+    static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
+    static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
+    #else
     nonisolated(unsafe) static let crab: [NSImage] = decode(clawdCrabFramePNGs)    // walking Clawd, full color
     nonisolated(unsafe) static let spark: [NSImage] = decode(claudeSparkFramePNGs) // alpha masks, tinted at runtime
+    #endif
 
     private static func decode(_ b64s: [String]) -> [NSImage] {
         b64s.compactMap { Data(base64Encoded: $0).flatMap(NSImage.init(data:)) }

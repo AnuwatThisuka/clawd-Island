@@ -238,9 +238,7 @@ final class AppModel {
             weeklyResetFromConfig = ISO8601DateFormatter().date(from: iso)
         }
         if let oauth = root["oauthAccount"] as? [String: Any],
-           let type = oauth["organizationType"] as? String,
-           let tier = oauth["organizationRateLimitTier"] as? String {
-            // planName = Fmt.planLabel(tier)
+           let type = oauth["organizationType"] as? String {
             planName = Fmt.organizationTypeLabel(type)
         }
     }

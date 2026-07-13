@@ -9,11 +9,14 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-hook_script="$(cd "$script_dir/../Sources/ClawdIsland/Hooks" && pwd)/session-hook.sh"
+hooks_dir="$(cd "$script_dir/../Sources/ClawdIsland/Hooks" && pwd)"
+hook_script="$hooks_dir/session-hook.sh"
+perm_script="$hooks_dir/permission-hook.sh"
 settings="$HOME/.claude/settings.json"
 
-# Must match the command string install wrote, so we remove exactly what we added.
+# Must match the command strings install wrote, so we remove exactly what we added.
 hook_cmd="$hook_script"
+perm_cmd="$perm_script"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "error: jq is required (brew install jq)" >&2
@@ -25,9 +28,10 @@ if [ ! -f "$settings" ]; then
   exit 0
 fi
 
-# Remove our groups; drop events that end up empty; drop .hooks if it ends up empty.
-updated="$(jq --arg cmd "$hook_cmd" '
-  def notours: map(select([.hooks[]?.command] | index($cmd) | not));
+# Remove our groups (observer AND permission); drop events that end up empty; drop .hooks if it
+# ends up empty.
+updated="$(jq --arg cmd "$hook_cmd" --arg perm "$perm_cmd" '
+  def notours: map(select([.hooks[]?.command] | (index($cmd) // index($perm)) | not));
   if .hooks then
       .hooks |= with_entries(.value |= notours)
     | .hooks |= with_entries(select(.value | length > 0))

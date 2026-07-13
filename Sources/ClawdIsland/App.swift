@@ -50,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = model.activity != nil
             _ = model.activityDropHeight
             _ = model.dropHeight
+            _ = model.currentPermission != nil
+            _ = model.permissionDropHeight
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

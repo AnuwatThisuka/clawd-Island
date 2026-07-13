@@ -68,11 +68,15 @@ final class IslandWindow {
         let closedW = model.notchWidth + 56 * 2 + 24 + 24  // wing+gap+wing + edge insets + margin
         // Expanded pill grows to ~400pt so the Usage Monitor rows fit; keep the hit zone in sync.
         let zoneW: CGFloat = model.isExpanded ? max(closedW, 400 + 24) : closedW
-        // Footprint tracks whatever's dropped below the notch: the click-opened monitor, or the
-        // auto-opened live-activity band when a tool runs. Both grow the hit region downward.
+        // Footprint tracks whatever's dropped below the notch: the click-opened monitor, the
+        // Approve/Deny band when a tool is blocked (its buttons MUST be clickable, so this branch
+        // takes priority over activity), or the auto-opened live-activity band. Each grows the hit
+        // region downward, matching the drop-slot priority in IslandView.
         let zoneH: CGFloat
         if model.isExpanded {
             zoneH = closedH + dropH + 8
+        } else if model.currentPermission != nil {
+            zoneH = closedH + model.permissionDropHeight + 8
         } else if model.activity != nil {
             zoneH = closedH + model.activityDropHeight + 8
         } else {

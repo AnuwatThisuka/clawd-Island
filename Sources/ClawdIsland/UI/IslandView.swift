@@ -45,20 +45,27 @@ struct IslandView: View {
     private var wing: CGFloat { max(closedWing, (pillWidth - gap - edgeInset * 2) / 2) }
     private var used: Double { model.sessionUsage ?? 0 }
 
-    /// A tool is running and the user hasn't click-opened the monitor, so the pill auto-drops the
-    /// live-activity detail band. A manual expand (monitor panel) takes precedence over it.
-    private var showActivityBand: Bool { model.activity != nil && !expanded }
+    /// A gated tool is blocked waiting for the user, and they haven't click-opened the monitor —
+    /// the pill drops the Approve/Deny band. A hard stop, so it takes the drop slot with priority
+    /// over the live-activity band, but a manual expand (monitor panel) still wins.
+    private var showPermissionBand: Bool { model.currentPermission != nil && !expanded }
 
-    /// How far the pill grows below the notch: the monitor when click-opened, the activity band
-    /// when a tool runs, otherwise nothing (stays a closed pill).
+    /// A tool is running, nothing is blocked on approval, and the user hasn't click-opened the
+    /// monitor — so the pill auto-drops the live-activity detail band. Manual expand and a pending
+    /// permission both take precedence over it.
+    private var showActivityBand: Bool { model.activity != nil && !showPermissionBand && !expanded }
+
+    /// How far the pill grows below the notch: the monitor when click-opened, the approval band
+    /// when a tool is blocked, the activity band when a tool runs, otherwise nothing.
     private var contentDropHeight: CGFloat {
         if expanded { return dropHeight }
+        if showPermissionBand { return model.permissionDropHeight }
         if showActivityBand { return model.activityDropHeight }
         return 0
     }
 
     var body: some View {
-        let dropped = expanded || showActivityBand
+        let dropped = expanded || showPermissionBand || showActivityBand
         let shape = NotchShape(topRadius: 8,
                                bottomRadius: dropped ? 22 : max(10, closedH * 0.40))
         ZStack(alignment: .top) {
@@ -69,6 +76,13 @@ struct IslandView: View {
                     dropDown
                         .frame(width: pillWidth, alignment: .top)   // natural height, measured below
                         .background(dropHeightReader)
+                } else if let perm = model.currentPermission {
+                    PermissionView(request: perm,
+                                   queued: max(0, model.pendingPermissions.count - 1),
+                                   onApprove: { model.approveCurrentPermission() },
+                                   onDeny: { model.denyCurrentPermission() })
+                        .frame(width: closedWidth, alignment: .top)
+                        .background(permissionHeightReader)
                 } else if let act = model.activity {
                     ActivityDetailView(activity: act)
                         .frame(width: closedWidth, alignment: .top)
@@ -87,8 +101,10 @@ struct IslandView: View {
         .animation(Self.islandSpring, value: expanded)
         .animation(Self.islandSpring, value: dropHeight)
         .animation(Self.islandSpring, value: model.activityDropHeight)
+        .animation(Self.islandSpring, value: model.permissionDropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
         .animation(.easeInOut(duration: 0.25), value: model.activity)
+        .animation(.easeInOut(duration: 0.25), value: model.currentPermission)
     }
 
     private static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
@@ -178,6 +194,16 @@ struct IslandView: View {
         GeometryReader { geo in
             Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
                 if h > 0 { model.activityDropHeight = h }
+            }
+        }
+    }
+
+    // Same contract again, for the permission approval band — its height varies with the summary
+    // (subtitle present/absent) and the "N more waiting" line, so the hit zone tracks the buttons.
+    private var permissionHeightReader: some View {
+        GeometryReader { geo in
+            Color.clear.onChange(of: geo.size.height, initial: true) { _, h in
+                if h > 0 { model.permissionDropHeight = h }
             }
         }
     }

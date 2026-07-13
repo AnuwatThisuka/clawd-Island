@@ -7,6 +7,10 @@ final class AppModel {
     /// Live "what Claude Code is doing right now" status, driven by the hook state files.
     /// nil = nothing running. Updated ~3×/s off the `state.d/` heartbeat feed.
     private(set) var activity: SessionActivity?
+    /// Tool-approval requests currently blocking a session, oldest first, from the permission
+    /// hook feed. Independent of `isPaused` (a blocked session must still be answerable) and
+    /// of `activity` — a pending request takes the drop slot with priority. Empty = nothing to approve.
+    private(set) var pendingPermissions: [PermissionRequest] = []
     var isExpanded = false
     var isPaused = false
     var claudeRunning = false
@@ -24,6 +28,14 @@ final class AppModel {
     /// notch while a tool runs. Same read/write contract as `dropHeight`, but for the auto-opened
     /// active state rather than the click-opened tile grid. Seeded so the first frame isn't clipped.
     var activityDropHeight: CGFloat = 46
+    /// Measured natural height of the permission-approval band (summary + Approve/Deny buttons).
+    /// Same read/write contract as `activityDropHeight`, for the pending-request drop slot. Seeded
+    /// tall enough that the first frame — which includes two buttons — isn't clipped before measure.
+    var permissionDropHeight: CGFloat = 118
+
+    /// The request the notch is currently asking the user to answer (the oldest pending one), or
+    /// nil when nothing is blocked. Drives the approval band's presence and priority over activity.
+    var currentPermission: PermissionRequest? { pendingPermissions.first }
 
     /// Live account limits from claude.ai (authoritative, matches Claude Desktop).
     private(set) var limits: ClaudeLimits?
@@ -129,6 +141,29 @@ final class AppModel {
     private func readActivity() {
         let next = isPaused ? nil : SessionActivityFeed.read()
         if next != activity { activity = next }
+        readPermissions()
+    }
+
+    /// Refresh pending tool-approval requests from the permission hook feed. Unlike activity this
+    /// is NOT gated on `isPaused` — a session blocked on a permission must stay answerable — and it
+    /// runs on the same 0.3s timer so an Approve/Deny prompt appears near-instantly. Stale requests
+    /// (whose hook already timed out to the terminal prompt) are swept before reading.
+    private func readPermissions() {
+        PermissionStore.pruneStale()
+        let next = PermissionStore.pending()
+        if next != pendingPermissions { pendingPermissions = next }
+    }
+
+    /// Approve the oldest pending request: write its decision (the blocked hook is polling for it)
+    /// and drop it from the queue immediately so the UI advances to the next one without waiting
+    /// for the hook to remove the file on the next poll.
+    func approveCurrentPermission() { decideCurrent(allow: true) }
+    func denyCurrentPermission() { decideCurrent(allow: false) }
+
+    private func decideCurrent(allow: Bool) {
+        guard let req = pendingPermissions.first else { return }
+        PermissionStore.decide(req.id, allow: allow)
+        pendingPermissions.removeFirst()
     }
 
     func togglePause() { isPaused.toggle(); if !isPaused { refresh() } }

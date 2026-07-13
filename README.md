@@ -21,6 +21,7 @@ care about spread out into a proper dashboard.
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Session ring**           | Live 5-hour and 7-day usage, colour-coded (white → amber → red) so you can tell your status without reading a number |
 | **Live tool status**       | While Claude Code is working, the notch shows a green pulse and the tool it's running right now — Bash, Edit, a web fetch — then flips back to your usage % the moment it goes idle (opt-in, see below) |
+| **Permission approvals**   | When Claude Code needs the go-ahead to run a shell command, write a file, or hit an MCP tool, the notch drops an Approve / Deny prompt — decide without switching to the terminal (opt-in, see below) |
 | **Full breakdown on tap**  | 5-hour, 7-day, extra credits, today's cost, today's token count, and your current plan — six tiles, one click away   |
 | **Real reset timers**      | Not estimates — the actual countdown Claude Desktop shows you                                                        |
 | **Local cost tracking**    | Today's spend and token count are computed straight from your `~/.claude` logs, no network call needed for that part |
@@ -100,7 +101,9 @@ The installer backs up any existing settings once to
 left untouched, and re-running it never duplicates our entries. Each hook is a passive
 observer marked `"async": true`, so it never blocks or slows a Claude Code session; it
 just drops a tiny state file under
-`~/Library/Application Support/ClawdIsland/state.d/` that the island polls.
+`~/Library/Application Support/ClawdIsland/state.d/` that the island polls. (The same
+installer also wires the optional permission gate described below — a separate,
+synchronous hook — so you get both from one command.)
 
 Open a new `claude` session for the hooks to take effect. To remove them again:
 
@@ -109,6 +112,25 @@ bash scripts/uninstall-hooks.sh
 ```
 
 which strips only our hooks and leaves everything else in place.
+
+## Permission approvals (optional)
+
+`install-hooks.sh` also wires a second, **synchronous** hook —
+`Sources/ClawdIsland/Hooks/permission-hook.sh` — into `PreToolUse`, scoped to the tools
+worth stopping for: `Bash`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `WebFetch`, and
+any `mcp__*` tool. Reads and searches (`Read`, `Grep`, `Glob`) pass straight through, so
+you're only asked about the things that actually change something.
+
+When Claude Code is about to run one of those, the hook publishes a request under
+`~/Library/Application Support/ClawdIsland/permissions.d/` and **blocks**, and the notch
+drops an amber Approve / Deny band. Your choice is written straight back to the waiting
+hook — Approve lets the tool run, Deny stops it with a reason Claude sees. Several
+sessions can queue at once; they're answered oldest-first with a "N more waiting" count.
+
+It's designed to fail open: if the app isn't running, or you don't answer within ~55s,
+the hook simply steps aside and Claude Code's normal terminal prompt takes over. The
+notch is an extra approval surface, never the only one — a broken or closed app can never
+strand a session. Removing the hooks with `uninstall-hooks.sh` strips this one too.
 
 ## Day to day
 

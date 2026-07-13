@@ -14,11 +14,20 @@ enum PermissionStore {
                                     isDirectory: true)
     }
 
-    /// A request older than this is assumed abandoned — its hook's 55s poll has long since timed
-    /// out and deferred to the terminal prompt, so answering it now would write a decision no one
-    /// reads. Kept comfortably above the hook's `max_wait` (55s) plus Claude Code's 60s hook cap so
-    /// we never drop a request the hook is still genuinely waiting on.
-    static let staleAfter: TimeInterval = 120
+    /// App-liveness heartbeat the permission hook checks before (and while) it blocks. The app
+    /// re-stamps its mtime every ~2s; a stale/missing file tells the hook the notch isn't running,
+    /// so it defers to Claude Code's normal dialog instead of blocking on a decision that will
+    /// never come.
+    static var heartbeatURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/ClawdIsland/app-heartbeat")
+    }
+
+    /// A request older than this is assumed abandoned — its hook's poll has long since timed out
+    /// and deferred to the normal dialog, so answering it now would write a decision no one reads.
+    /// Kept comfortably above the hook's `max_wait` (120s) so we never drop a request the hook is
+    /// still genuinely waiting on.
+    static let staleAfter: TimeInterval = 150
 
     /// All live pending requests, oldest first (so the queue is answered FIFO). Stale ones are
     /// skipped here and swept by `pruneStale`.

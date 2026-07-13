@@ -63,6 +63,9 @@ final class AppModel {
     /// files that actually grew and skips the rest.
     private var parsedMTimes: [URL: Date] = [:]
     private var lastReingest = Date.distantPast
+    /// Last time we re-stamped the app-liveness heartbeat the permission hook checks. Throttles
+    /// the write off the 0.3s activity poll down to ~2s.
+    private var lastHeartbeat = Date.distantPast
 
     // MARK: display values (prefer live limits, then terminal feed, then estimate)
 
@@ -149,9 +152,25 @@ final class AppModel {
     /// runs on the same 0.3s timer so an Approve/Deny prompt appears near-instantly. Stale requests
     /// (whose hook already timed out to the terminal prompt) are swept before reading.
     private func readPermissions() {
+        touchHeartbeat()
         PermissionStore.pruneStale()
         let next = PermissionStore.pending()
         if next != pendingPermissions { pendingPermissions = next }
+    }
+
+    /// Re-stamp the app-liveness heartbeat the permission hook polls before (and while) it blocks.
+    /// A fresh mtime tells the hook the notch is running and will answer; if this stops (app quit),
+    /// the hook defers to Claude Code's normal dialog instead of stranding the session. Throttled
+    /// to ~2s off the 0.3s poll — the hook tolerates a couple of missed beats (6s window).
+    private func touchHeartbeat() {
+        guard Date().timeIntervalSince(lastHeartbeat) >= 2 else { return }
+        lastHeartbeat = Date()
+        let url = PermissionStore.heartbeatURL
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try Data().write(to: url)   // content irrelevant; the mtime is the signal
+        } catch { /* best-effort: a missed beat just means the hook may briefly defer */ }
     }
 
     /// Approve the oldest pending request: write its decision (the blocked hook is polling for it)

@@ -20,10 +20,16 @@ perm_script="$hooks_dir/permission-hook.sh"
 settings="$HOME/.claude/settings.json"
 backup="$settings.bak-clawdisland"
 
-# Tools gated by the permission hook. Regex matched against the tool name by Claude Code:
-# mutating/shell/web + all MCP tools. Reads (Read/Grep/Glob) pass through untouched, keeping
-# their normal flow. Everything not matched here never triggers the blocking hook.
-perm_matcher="Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|mcp__.*"
+# The permission gate is a PermissionRequest hook, which Claude Code fires ONLY when it would
+# actually show its permission dialog — never for allowlisted or auto-approved tools. So the
+# matcher is "*" (every tool Claude asks about); the event itself does the scoping, mirroring
+# Claude's real prompts one-to-one. No PreToolUse tool-name allowlist needed.
+perm_matcher="*"
+
+# Seconds Claude Code waits for the blocking permission hook before killing it. The hook itself
+# caps its wait at 120s and defers on timeout; this must sit above that so Claude doesn't reap it
+# mid-wait. (Default PermissionRequest timeout is 600s; we set it explicitly to be safe.)
+perm_timeout=130
 
 # --- preconditions ----------------------------------------------------------
 if ! command -v jq >/dev/null 2>&1; then
@@ -77,20 +83,23 @@ fi
 # continuously live (see session-hook.sh).
 #
 # Permission gate (permission-hook.sh): SYNCHRONOUS (no async flag) so Claude Code waits for its
-# stdout decision, scoped by $matcher to the gated tool set. It shares PreToolUse with the
-# observer as a second, separate group — Claude Code runs both; only this one can block.
+# stdout decision, registered on the PermissionRequest event — which fires only when Claude would
+# actually prompt — with an explicit timeout above the hook's own 120s wait. Separate event from
+# the observer, so the two never interfere.
 updated="$(printf '%s' "$current" | jq \
   --arg cmd "$hook_cmd" \
   --arg perm "$perm_cmd" \
-  --arg matcher "$perm_matcher" '
+  --arg matcher "$perm_matcher" \
+  --argjson timeout "$perm_timeout" '
   def obsgroup:  {hooks: [{type: "command", command: $cmd,  async: true}]};
-  def permgroup: {matcher: $matcher, hooks: [{type: "command", command: $perm}]};
+  def permgroup: {matcher: $matcher, hooks: [{type: "command", command: $perm, timeout: $timeout}]};
   def notours: map(select([.hooks[]?.command] | (index($cmd) // index($perm)) | not));
   .hooks = (.hooks // {})
-  | .hooks.SessionStart = ((.hooks.SessionStart // []) | notours) + [obsgroup]
-  | .hooks.PreToolUse   = ((.hooks.PreToolUse   // []) | notours) + [obsgroup, permgroup]
-  | .hooks.PostToolUse  = ((.hooks.PostToolUse  // []) | notours) + [obsgroup]
-  | .hooks.Stop         = ((.hooks.Stop         // []) | notours) + [obsgroup]
+  | .hooks.SessionStart      = ((.hooks.SessionStart      // []) | notours) + [obsgroup]
+  | .hooks.PreToolUse        = ((.hooks.PreToolUse        // []) | notours) + [obsgroup]
+  | .hooks.PostToolUse       = ((.hooks.PostToolUse       // []) | notours) + [obsgroup]
+  | .hooks.Stop              = ((.hooks.Stop              // []) | notours) + [obsgroup]
+  | .hooks.PermissionRequest = ((.hooks.PermissionRequest // []) | notours) + [permgroup]
 ')"
 
 # Write atomically so a crash can't leave a half-written settings.json.
@@ -99,8 +108,8 @@ printf '%s\n' "$updated" > "$tmp"
 mv -f "$tmp" "$settings"
 
 echo "installed ClawdIsland hooks into $settings"
-echo "  observer   -> $hook_cmd"
-echo "  permission -> $perm_cmd  (gates: $perm_matcher)"
+echo "  observer   -> $hook_cmd  (SessionStart/PreToolUse/PostToolUse/Stop, async)"
+echo "  permission -> $perm_cmd  (PermissionRequest, blocking, timeout ${perm_timeout}s)"
 echo "state files will appear in:  ~/Library/Application Support/ClawdIsland/state.d/"
 echo "approval requests appear in: ~/Library/Application Support/ClawdIsland/permissions.d/"
 echo "open a new 'claude' session for the hooks to take effect."

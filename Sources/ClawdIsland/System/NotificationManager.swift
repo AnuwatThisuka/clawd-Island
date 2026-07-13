@@ -43,7 +43,11 @@ final class NotificationManager {
     private func requestAuthorization() {
         guard available, !didRequestAuth else { return }
         didRequestAuth = true
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        // Use the async API — the callback variant invokes its handler on a background queue,
+        // which traps under @MainActor isolation checking.
+        Task {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        }
     }
 
     /// Evaluate both limits against the thresholds and fire any newly crossed ones. Safe to call on

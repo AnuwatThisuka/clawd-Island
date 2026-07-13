@@ -17,9 +17,9 @@ final class AppModel {
     var notchWidth: CGFloat = 190
     var topInset: CGFloat = 32
     /// Measured natural height of the expanded drop-down content. Written by IslandView once
-    /// the tile grid lays out, read by IslandWindow to size the click-catcher. Starts at a
-    /// sensible estimate so the very first expand isn't clipped before the measurement lands.
-    var dropHeight: CGFloat = 198
+    /// the Usage Monitor panel lays out, read by IslandWindow to size the click-catcher. Starts
+    /// at a sensible estimate so the very first expand isn't clipped before the measurement lands.
+    var dropHeight: CGFloat = 250
     /// Measured natural height of the live-activity detail band (verb + subtitle) shown below the
     /// notch while a tool runs. Same read/write contract as `dropHeight`, but for the auto-opened
     /// active state rather than the click-opened tile grid. Seeded so the first frame isn't clipped.
@@ -31,6 +31,7 @@ final class AppModel {
     private(set) var contextRemaining: Double?
     /// Friendly plan name, e.g. "Claude Max 5x" (from ~/.claude.json).
     private(set) var planName: String?
+    private(set) var organizationType: String?
     private var statuslineUsage: Double?
     private var weeklyResetFromConfig: Date?
     /// Recent (time, session %) samples for the burn-rate ETA.
@@ -78,8 +79,9 @@ final class AppModel {
     /// Estimated time until the 5-hour limit at the current pace (nil if usage isn't trending
     /// up, or if the block resets first). Uses the slope of session % — no token cap needed.
     var etaToLimit: TimeInterval? {
-        guard let cur = limits?.sessionPct, cur < 0.999, pctHistory.count >= 2 else { return nil }
-        let recent = Array(pctHistory.suffix(8))
+        guard let cur = sessionUsage, cur < 0.999 else { return nil }
+        let cutoff = Date().addingTimeInterval(-600)   // slope over the last 10 minutes
+        let recent = pctHistory.filter { $0.t > cutoff }
         guard let first = recent.first, let last = recent.last else { return nil }
         let dt = last.t.timeIntervalSince(first.t)
         let dpct = last.pct - first.pct
@@ -148,16 +150,17 @@ final class AppModel {
 
     /// Store new limits and track the % trend for the burn-rate ETA.
     private func applyLimits(_ l: ClaudeLimits) {
-        // A new block (reset time jumped later) → clear the ETA trend.
-        if let prev = limits?.sessionResetsAt, let now = l.sessionResetsAt,
-           now > prev.addingTimeInterval(60) {
+        // A new block (reset time jumped later) → clear the ETA trend. Also clear on the first
+        // live fetch: earlier samples came from the statusline feed, whose % can be offset from
+        // the live value, and mixing the two would fake a slope jump.
+        if limits == nil {
+            pctHistory.removeAll()
+        } else if let prev = limits?.sessionResetsAt, let now = l.sessionResetsAt,
+                  now > prev.addingTimeInterval(60) {
             pctHistory.removeAll()
         }
         limits = l
-        if let p = l.sessionPct {
-            pctHistory.append((Date(), p))
-            if pctHistory.count > 20 { pctHistory.removeFirst(pctHistory.count - 20) }
-        }
+        trackSessionPct()
         notifier.evaluate(session: l.sessionPct, sessionResetsAt: l.sessionResetsAt,
                           weekly: l.weeklyPct, weeklyResetsAt: l.weeklyResetsAt)
     }
@@ -198,6 +201,18 @@ final class AppModel {
     func refresh() {
         snapshot = store.snapshot(now: Date())
         readStatusFeed()
+        trackSessionPct()
+    }
+
+    /// Sample the displayed session % into the burn-rate history. Runs on the 5s tick as well
+    /// as the 60s limits fetch, so the ETA warms up in about a minute instead of several.
+    /// Unchanged values are re-sampled at most every 15s to keep the trend window populated
+    /// without flooding the buffer.
+    private func trackSessionPct() {
+        guard let p = sessionUsage else { return }
+        if let last = pctHistory.last, last.pct == p, Date().timeIntervalSince(last.t) < 15 { return }
+        pctHistory.append((Date(), p))
+        if pctHistory.count > 80 { pctHistory.removeFirst(pctHistory.count - 80) }
     }
 
     /// Terminal statusline feed (fallback source for session % and context).
@@ -223,8 +238,10 @@ final class AppModel {
             weeklyResetFromConfig = ISO8601DateFormatter().date(from: iso)
         }
         if let oauth = root["oauthAccount"] as? [String: Any],
+           let type = oauth["organizationType"] as? String,
            let tier = oauth["organizationRateLimitTier"] as? String {
-            planName = Fmt.planLabel(tier)
+            // planName = Fmt.planLabel(tier)
+            planName = Fmt.organizationTypeLabel(type)
         }
     }
 }

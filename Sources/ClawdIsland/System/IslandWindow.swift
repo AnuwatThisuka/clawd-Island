@@ -38,12 +38,14 @@ final class IslandWindow {
     private let panel: NotchPanel
     private let hosting: PassthroughHostingView<IslandRootView>
     private let model: AppModel
-    private let panelHeight: CGFloat = 260
+    /// Tall enough for the Usage Monitor drop-down (status + 2 limit rows + stats + footer)
+    /// under the notch. The pill still sizes itself; this only caps the strip window.
+    private let panelHeight: CGFloat = 340
 
     init(model: AppModel) {
         self.model = model
         hosting = PassthroughHostingView(rootView: IslandRootView(model: model))
-        panel = NotchPanel(contentRect: NSRect(x: 0, y: 0, width: 400, height: panelHeight))
+        panel = NotchPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: panelHeight))
         panel.contentView = hosting
     }
 
@@ -62,9 +64,11 @@ final class IslandWindow {
     /// window resize, so no animation jump.
     func updateInteractiveZone() {
         let closedH = max(model.topInset, 30)
-        let dropH = model.dropHeight                        // measured from the tile grid
-        let zoneW = model.notchWidth + 56 * 2 + 24 + 24    // wing+gap+wing + edge insets + margin
-        // Footprint tracks whatever's dropped below the notch: the click-opened tile grid, or the
+        let dropH = model.dropHeight                        // measured from the monitor panel
+        let closedW = model.notchWidth + 56 * 2 + 24 + 24  // wing+gap+wing + edge insets + margin
+        // Expanded pill grows to ~400pt so the Usage Monitor rows fit; keep the hit zone in sync.
+        let zoneW: CGFloat = model.isExpanded ? max(closedW, 400 + 24) : closedW
+        // Footprint tracks whatever's dropped below the notch: the click-opened monitor, or the
         // auto-opened live-activity band when a tool runs. Both grow the hit region downward.
         let zoneH: CGFloat
         if model.isExpanded {

@@ -16,32 +16,38 @@ struct IslandRootView: View {
 }
 
 /// The notch-fused black island. Closed: Clawd + session-% flanking the camera. Expanded: it
-/// grows taller (never wider), dropping a tile grid below the notch. The NotchShape's radii
-/// animate, so it morphs like the notch itself growing.
+/// grows taller and a little wider, dropping a Usage Monitor panel below the notch. The
+/// NotchShape's radii animate, so it morphs like the notch itself growing.
 struct IslandView: View {
     let model: AppModel
     let notchWidth: CGFloat
     let topInset: CGFloat
 
-    /// 5-Hour tile: false = show burn-rate ETA when available, true = always show reset.
+    /// 5-Hour row: false = show burn-rate ETA when available, true = always show reset.
     @State private var prefReset = false
 
-    private let wing: CGFloat = 56
+    private let closedWing: CGFloat = 56
     private let iconSize: CGFloat = 18
     private let edgeInset: CGFloat = 12   // keeps content off the pill's flared edges
+    /// Wider than the closed pill so the limit rows + stats can breathe like the reference card.
+    private let expandedWidth: CGFloat = 400
 
     private var expanded: Bool { model.isExpanded }
-    private var dropHeight: CGFloat { model.dropHeight }   // measured from the tile grid
+    private var dropHeight: CGFloat { model.dropHeight }   // measured from the monitor panel
     private var closedH: CGFloat { max(topInset, 30) }
     private var gap: CGFloat { notchWidth }
-    private var closedWidth: CGFloat { wing + gap + wing + edgeInset * 2 }
+    private var closedWidth: CGFloat { closedWing + gap + closedWing + edgeInset * 2 }
+    /// Closed: tight around the camera. Open: grows sideways so the dashboard fits.
+    private var pillWidth: CGFloat { expanded ? max(closedWidth, expandedWidth) : closedWidth }
+    /// Side wings stretch with the pill so the avatar / % stay camera-flanking when open.
+    private var wing: CGFloat { max(closedWing, (pillWidth - gap - edgeInset * 2) / 2) }
     private var used: Double { model.sessionUsage ?? 0 }
 
-    /// A tool is running and the user hasn't click-opened the tile grid, so the pill auto-drops the
-    /// live-activity detail band. A manual expand (tile grid) takes precedence over it.
+    /// A tool is running and the user hasn't click-opened the monitor, so the pill auto-drops the
+    /// live-activity detail band. A manual expand (monitor panel) takes precedence over it.
     private var showActivityBand: Bool { model.activity != nil && !expanded }
 
-    /// How far the pill grows below the notch: the tile grid when click-opened, the activity band
+    /// How far the pill grows below the notch: the monitor when click-opened, the activity band
     /// when a tool runs, otherwise nothing (stays a closed pill).
     private var contentDropHeight: CGFloat {
         if expanded { return dropHeight }
@@ -56,10 +62,10 @@ struct IslandView: View {
         ZStack(alignment: .top) {
             shape.fill(Color.black)
             VStack(spacing: 0) {
-                notchRow.frame(width: closedWidth, height: closedH)
+                notchRow.frame(width: pillWidth, height: closedH)
                 if expanded {
                     dropDown
-                        .frame(width: closedWidth, alignment: .top)   // natural height, measured below
+                        .frame(width: pillWidth, alignment: .top)   // natural height, measured below
                         .background(dropHeightReader)
                 } else if let act = model.activity {
                     ActivityDetailView(activity: act)
@@ -68,18 +74,22 @@ struct IslandView: View {
                 }
             }
         }
-        .frame(width: closedWidth,
+        .frame(width: pillWidth,
                height: closedH + contentDropHeight,
                alignment: .top)
         .clipShape(shape)
         .contentShape(shape)
         .contextMenu { menu }
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: expanded)
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: dropHeight)
-        .animation(.spring(response: 0.6, dampingFraction: 1.0), value: model.activityDropHeight)
+        // Notchnook / Dynamic Island feel: snappy drop with a light elastic settle
+        // (was response 0.6 / damping 1.0 — heavy and critically damped).
+        .animation(Self.islandSpring, value: expanded)
+        .animation(Self.islandSpring, value: dropHeight)
+        .animation(Self.islandSpring, value: model.activityDropHeight)
         .animation(.easeInOut(duration: 0.3), value: used)
         .animation(.easeInOut(duration: 0.25), value: model.activity)
     }
+
+    private static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
     // Right-click menu (replaces the menu-bar item).
     @ViewBuilder private var menu: some View {
@@ -170,37 +180,58 @@ struct IslandView: View {
         }
     }
 
-    // MARK: drop-down — tile grid below the notch
+    // MARK: drop-down — Usage Monitor panel below the notch
 
     private var dropDown: some View {
         let s = model.snapshot
-        return VStack(spacing: 8) {
-            LazyVGrid(columns: [.init(.flexible(), spacing: 8), .init(.flexible(), spacing: 8)], spacing: 8) {
-                limitTile("5-Hour", icon: "hourglass", model.sessionUsage, resets: model.sessionResetsAt,
-                          eta: prefReset ? nil : model.etaToLimit)
-                    .contentShape(Rectangle())
-                    .onTapGesture { if model.etaToLimit != nil { prefReset.toggle() } }
-                    .help(model.etaToLimit != nil ? "Click to switch reset / burn-rate" : "")
-                limitTile("7-Day", icon: "calendar", model.weeklyUsage, resets: model.weeklyResetsAt,
-                          breakdown: weeklyBreakdown)
-                tile("credits", icon: "gift", model.limits?.creditsPct.map { Fmt.pct($0) + " used" } ?? "none", numeric: true)
-                tile("cost today", icon: "dollarsign.circle", s.isEmpty ? "—" : Fmt.usd(s.costToday), numeric: true)
-                tile("tokens today", icon: "cpu", s.isEmpty ? "—" : Fmt.tokens(s.tokensToday), numeric: true)
-                tile("plan", icon: "crown", shortPlan, numeric: false)
-            }
-            .opacity(model.isStale ? 0.55 : 1)         // dim live limits when not fresh
+        return VStack(spacing: 0) {
+            statusRow
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 10)
 
-            HStack {
-                Text(model.lastFetch.map { "Updated \(Fmt.ago($0)) ago" + (model.isStale ? " · reconnecting" : "") }
-                     ?? "token estimate")
-                    .foregroundStyle(model.isStale ? Color.tileAmber
-                                                    : .white.opacity(0.4))
-                Spacer()
-                Text(model.usageSource).foregroundStyle(.white.opacity(0.4))
+            divider
+
+            limitRow(title: "5-Hour Limit", icon: "hourglass",
+                     value: model.sessionUsage,
+                     resets: model.sessionResetsAt,
+                     eta: prefReset ? nil : model.etaToLimit)
+                .contentShape(Rectangle())
+                .onTapGesture { prefReset.toggle() }
+                .help("Click to switch reset / burn-rate")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+            divider
+
+            limitRow(title: "7-Day Limit", icon: "calendar.badge.checkmark",
+                     value: model.weeklyUsage,
+                     resets: model.weeklyResetsAt,
+                     breakdown: weeklyBreakdown)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+            divider
+
+            HStack(alignment: .top, spacing: 0) {
+                statCol(icon: "cpu", label: "Tokens Today",
+                        value: s.isEmpty ? "—" : Fmt.tokens(s.tokensToday), numeric: true)
+                statCol(icon: "dollarsign.circle", label: "Cost Today",
+                        value: s.isEmpty ? "—" : Fmt.usd(s.costToday), numeric: true)
+                statCol(icon: "crown", label: "Plan", value: shortPlan, numeric: false)
             }
-            .font(.system(size: 10))
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+
+            divider
+
+            footer
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 10)
         }
-        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 9)
+        .opacity(model.isStale ? 0.55 : 1)
     }
 
     private var shortPlan: String {
@@ -213,96 +244,165 @@ struct IslandView: View {
         return "Opus \(Fmt.pct(o)) · Sonnet \(Fmt.pct(s))"
     }
 
-    // A primary limit tile: icon+label, a large colour-coded %, a thin progress bar showing the
-    // real fraction, a "resets in …" subline, and an optional per-model breakdown line (used by
-    // the 7-Day tile when Opus/Sonnet are tracked separately). These read as the top tier: bigger
-    // number, stronger card fill than the secondary tiles below.
-    private func limitTile(_ label: String, icon: String, _ value: Double?, resets: Date?,
-                           eta: TimeInterval? = nil, breakdown: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            tileLabel(label, icon: icon)
-            Text(value.map(Fmt.pct) ?? "—")
-                .font(.system(size: 26, weight: .medium)).monospacedDigit()   // mono: no jitter on 60s updates
-                .foregroundStyle(barColor(value ?? 0))
-            progressBar(value ?? 0)
-            if let eta {
-                Text("~\(Fmt.dur(eta)) to limit")
-                    .font(.system(size: 9.5, weight: .medium)).lineLimit(1)
-                    .foregroundStyle(Color.tileAmber)
-            } else {
-                Text(resets.map { "resets in \(Fmt.until($0))" } ?? "resets —")
-                    .font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+    /// Compact status pill under the notch — accent tracks overall urgency via the ring palette.
+    private var statusRow: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+                Text(statusLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
             }
-            if let breakdown {
-                Text(breakdown)
-                    .font(.system(size: 9)).foregroundStyle(.white.opacity(0.4))
-                    .lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.06))
+            .clipShape(Capsule())
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var statusLabel: String {
+        if model.isStale { return "Reconnecting" }
+        if model.isAtLimit { return "Limit Reached" }
+        if model.iconUrgency >= 0.85 { return "Approaching Limit" }
+        return "All Systems Normal"
+    }
+
+    private var statusColor: Color {
+        if model.isStale { return RingState.warn.color }
+        return RingState(usage: model.iconUrgency).color
+    }
+
+    /// Session-ring accent used for decorative stats icons (not usage-gated themselves).
+    private var accentColor: Color { RingState(usage: used).color }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.08))
+            .frame(height: 1)
+            .padding(.horizontal, 16)
+    }
+
+    /// One horizontal limit row: icon box, title + reset subline, progress bar, trailing %.
+    private func limitRow(title: String, icon: String, value: Double?,
+                          resets: Date?, eta: TimeInterval? = nil,
+                          breakdown: String? = nil) -> some View {
+        let frac = value ?? 0
+        let color = RingState(usage: frac).color
+        return HStack(spacing: 12) {
+            iconBox(icon, color: color)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                        if let eta {
+                            Text("~\(Fmt.dur(eta)) to limit")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(RingState.warn.color)
+                                .lineLimit(1)
+                        } else {
+                            Text(resets.map { "resets in \(Fmt.until($0))" } ?? "resets —")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .lineLimit(1)
+                        }
+                        if let breakdown {
+                            Text(breakdown)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.white.opacity(0.4))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    HStack(spacing: 2) {
+                        Text(value.map(Fmt.pct) ?? "—")
+                            .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(color)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(color.opacity(0.7))
+                    }
+                }
+                progressBar(fraction: frac, color: color)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .tileCard(0.09)
     }
 
-    // A secondary value tile: smaller number, fainter card. Clearly a lower tier than the two
-    // limit tiles above. `numeric` gets monospaced digits (steady width as values tick).
-    private func tile(_ label: String, icon: String, _ value: String, numeric: Bool) -> some View {
-        let valueText = Text(value).font(.system(size: 15, weight: .medium))
-        return VStack(alignment: .leading, spacing: 2) {
-            tileLabel(label, icon: icon)
-            (numeric ? valueText.monospacedDigit() : valueText)
-                .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .topLeading)
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .tileCard(0.035)
+    private func iconBox(_ systemName: String, color: Color) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(color)
+            .frame(width: 32, height: 32)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    // Shared icon+label header row for every tile.
-    private func tileLabel(_ label: String, icon: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 9))
-            Text(label).font(.system(size: 10))
-        }
-        .foregroundStyle(.white.opacity(0.5))
-    }
-
-    // Thin rounded bar filling to `fraction`, colour-matched to the % via barColor/RingState.
-    private func progressBar(_ fraction: Double) -> some View {
-        GeometryReader { geo in
+    /// Continuous meter: single track filled left-to-right by `fraction`.
+    private func progressBar(fraction: Double, color: Color) -> some View {
+        let clamped = min(1, max(0, fraction))
+        return GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.12))
-                Capsule().fill(barColor(fraction))
-                    .frame(width: max(2, geo.size.width * min(1, max(0, fraction))))
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+                Capsule(style: .continuous)
+                    .fill(color)
+                    .frame(width: geo.size.width * clamped)
             }
         }
-        .frame(height: 4)
-        .animation(.easeInOut(duration: 0.5), value: fraction)
+        .frame(height: 8)
+        .animation(.easeInOut(duration: 0.45), value: fraction)
     }
 
-    private func barColor(_ used: Double) -> Color {
-        switch RingState(usage: used) {
-        case .ok: return .white
-        case .warn: return .tileAmber
-        case .critical: return .tileRed
+    /// One column in the Tokens / Cost / Plan strip.
+    @ViewBuilder
+    private func statCol(icon: String, label: String, value: String, numeric: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(accentColor)
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+            }
+            if numeric {
+                Text(value)
+                    .font(.system(size: 18, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            } else {
+                Text(value)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
     }
-}
 
-private extension View {
-    /// The translucent rounded backing shared by every island tile. `opacity` sets the tier:
-    /// stronger for the primary limit tiles, fainter for the secondary value tiles.
-    func tileCard(_ opacity: Double = 0.06) -> some View {
-        background(Color.white.opacity(opacity))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+    private var footer: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 9, weight: .medium))
+            Text(model.lastFetch.map {
+                "Updated \(Fmt.ago($0)) ago" + (model.isStale ? " · reconnecting" : "")
+            } ?? "token estimate")
+            Spacer(minLength: 0)
+            Text(model.usageSource)
+        }
+        .font(.system(size: 10))
+        .foregroundStyle(model.isStale ? RingState.warn.color : .white.opacity(0.4))
     }
 }
 
 extension Color {
-    /// Warn/critical accents for tile values and the stale-data notice. (The ring in
-    /// `Ring.swift` uses its own, deliberately brighter palette and is left untouched.)
-    static let tileAmber = Color(red: 0.96, green: 0.70, blue: 0.20)
-    static let tileRed = Color(red: 0.92, green: 0.34, blue: 0.34)
-    /// Live-activity accent for the running-tool indicator dot.
+    /// Live-activity accent for the running-tool indicator underline.
     static let tileGreen = Color(red: 0.36, green: 0.85, blue: 0.52)
 }

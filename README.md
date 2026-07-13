@@ -24,6 +24,7 @@ care about spread out into a proper dashboard.
 | **Full breakdown on tap**  | 5-hour, 7-day, extra credits, today's cost, today's token count, and your current plan — six tiles, one click away   |
 | **Real reset timers**      | Not estimates — the actual countdown Claude Desktop shows you                                                        |
 | **Local cost tracking**    | Today's spend and token count are computed straight from your `~/.claude` logs, no network call needed for that part |
+| **Per-project cost**       | Click the Tokens / Cost strip and today's spend splits out by project folder — see which repo is eating your budget  |
 | **A mascot with options**  | Clawd walks around at idle; right-click to swap between the crab, a mono version, or the Claude spark                |
 | **Burn-rate ETA**          | Tap the ring to switch from "% used" to "runs out at this rate around 4:20pm"                                        |
 | **Threshold alerts**       | Native macOS notification when session or weekly usage first crosses 80% and 95% — no need to glance at the notch    |
@@ -112,17 +113,13 @@ which strips only our hooks and leaves everything else in place.
 ## Day to day
 
 - Click the ring to open, click anywhere else to close it
+- Click the Tokens / Cost strip inside the panel to split today's spend by project
 - Click Clawd to cycle mascots
 - Right-click for icon settings, pause, threshold alerts, login item, and quit
 
 ## Roadmap
 
 Things planned or being considered, roughly ordered by how soon they'd land:
-
-**Next up**
-
-- [ ] Per-project cost — break "tokens/cost today" down by project folder under
-      `~/.claude`, not just a single daily total
 
 **Exploring**
 

@@ -25,6 +25,8 @@ struct IslandView: View {
 
     /// 5-Hour row: false = show burn-rate ETA when available, true = always show reset.
     @State private var prefReset = false
+    /// Tokens/Cost strip: true = per-project breakdown expanded below it.
+    @State private var showProjects = false
 
     private let closedWing: CGFloat = 56
     private let iconSize: CGFloat = 18
@@ -223,6 +225,15 @@ struct IslandView: View {
             .padding(.horizontal, 12)
             .padding(.top, 14)
             .padding(.bottom, 12)
+            .contentShape(Rectangle())
+            .onTapGesture { showProjects.toggle() }
+            .help("Click for per-project breakdown")
+
+            if showProjects && !s.projectsToday.isEmpty {
+                projectBreakdown(s.projectsToday)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
 
             divider
 
@@ -343,7 +354,7 @@ struct IslandView: View {
     }
 
     /// Continuous meter: single track filled left-to-right by `fraction`.
-    private func progressBar(fraction: Double, color: Color) -> some View {
+    private func progressBar(fraction: Double, color: Color, height: CGFloat = 8) -> some View {
         let clamped = min(1, max(0, fraction))
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -354,8 +365,49 @@ struct IslandView: View {
                     .frame(width: geo.size.width * clamped)
             }
         }
-        .frame(height: 8)
+        .frame(height: height)
         .animation(.easeInOut(duration: 0.45), value: fraction)
+    }
+
+    /// Per-project split of today's spend — top projects by cost, the rest folded into one row.
+    private func projectBreakdown(_ projects: [ProjectUsage]) -> some View {
+        let top = Array(projects.prefix(5))
+        let rest = projects.dropFirst(5)
+        let total = max(projects.reduce(0) { $0 + $1.cost }, .ulpOfOne)
+        return VStack(spacing: 6) {
+            ForEach(top) { p in
+                projectRow(name: p.name, tokens: p.tokens, cost: p.cost,
+                           share: p.cost / total)
+                    .help(p.path.isEmpty ? "No project folder recorded" : p.path)
+            }
+            if !rest.isEmpty {
+                projectRow(name: "\(rest.count) more…",
+                           tokens: rest.reduce(0) { $0 + $1.tokens },
+                           cost: rest.reduce(0) { $0 + $1.cost },
+                           share: rest.reduce(0) { $0 + $1.cost } / total)
+            }
+        }
+    }
+
+    /// One breakdown row: project name, share-of-today bar, tokens + cost trailing.
+    private func projectRow(name: String, tokens: Int, cost: Double,
+                            share: Double) -> some View {
+        HStack(spacing: 8) {
+            Text(name)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1).truncationMode(.middle)
+                .frame(width: 110, alignment: .leading)
+            progressBar(fraction: share, color: accentColor.opacity(0.8), height: 4)
+            Text(Fmt.tokens(tokens))
+                .font(.system(size: 9)).monospacedDigit()
+                .foregroundStyle(.white.opacity(0.4))
+                .frame(width: 40, alignment: .trailing)
+            Text(Fmt.usd(cost))
+                .font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 48, alignment: .trailing)
+        }
     }
 
     /// One column in the Tokens / Cost / Plan strip.

@@ -14,12 +14,26 @@ extension RingState {
     }
 }
 
+/// Today's spend for one project folder (grouped by the sessions' working directory).
+struct ProjectUsage: Equatable, Sendable, Identifiable {
+    let path: String     // full project directory ("" when the logs never recorded a cwd)
+    let tokens: Int
+    let cost: Double
+    var id: String { path }
+    /// Display label: last path component of the project directory.
+    var name: String {
+        path.isEmpty ? "Other" : (path as NSString).lastPathComponent
+    }
+}
+
 struct UsageSnapshot: Equatable, Sendable {
     var blockRemaining: TimeInterval?
     var blockFractionElapsed: Double
     var blockEnd: Date?
     var tokensToday: Int
     var costToday: Double
+    /// Today's usage split by project folder, sorted by cost descending.
+    var projectsToday: [ProjectUsage] = []
     var activeSessionTokens: Int
     var weeklyTokens: Int = 0
     var topModel: String?

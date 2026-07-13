@@ -95,10 +95,16 @@ struct PermissionView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(fill)
-                .clipShape(Capsule(style: .continuous))
+                // Corner radius matches the notch's dropped bottomRadius (see IslandView) so the
+                // buttons echo the pill's own rounding rather than reading as full capsules.
+                .clipShape(RoundedRectangle(cornerRadius: Self.notchCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
+
+    /// The island's dropped bottom-corner radius (`NotchShape` bottomRadius when open), mirrored
+    /// here so the button rounding lines up with the notch it sits inside.
+    private static let notchCornerRadius: CGFloat = 22
 }
 
 extension Color {

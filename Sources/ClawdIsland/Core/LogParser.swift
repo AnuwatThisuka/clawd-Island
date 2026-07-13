@@ -6,6 +6,7 @@ enum LogParser {
         let timestamp: Date?
         let sessionId: String?
         let requestId: String?
+        let cwd: String?
         let message: Message?
     }
     private struct Message: Decodable {
@@ -34,10 +35,12 @@ enum LogParser {
     static func parse(fileURL: URL) throws -> [UsageEvent] {
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         var out: [UsageEvent] = []
+        var lastCwd: String?
         for raw in text.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let data = raw.data(using: .utf8),
                   let line = try? decoder.decode(Line.self, from: data)
             else { continue }
+            if let cwd = line.cwd { lastCwd = cwd }
             guard line.type == "assistant",
                   let msg = line.message,
                   let usage = msg.usage,
@@ -54,7 +57,8 @@ enum LogParser {
                 inputTokens: usage.input_tokens ?? 0,
                 outputTokens: usage.output_tokens ?? 0,
                 cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
-                cacheReadTokens: usage.cache_read_input_tokens ?? 0))
+                cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+                projectPath: line.cwd ?? lastCwd))
         }
         return out
     }

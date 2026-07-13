@@ -22,6 +22,14 @@ import Foundation
         #expect(e.totalTokens == 360)
     }
 
+    @Test func carriesForwardCwdFromEarlierLines() throws {
+        // The assistant line in the fixture has no cwd of its own; the
+        // preceding user line's cwd must carry forward onto the event.
+        let events = try LogParser.parse(fileURL: fixtureURL("basic"))
+        let e = try #require(events.first)
+        #expect(e.projectPath == "/Users/dev/proj-x")
+    }
+
     @Test func parsesFractionalIso8601Timestamp() throws {
         let events = try LogParser.parse(fileURL: fixtureURL("basic"))
         let e = try #require(events.first)

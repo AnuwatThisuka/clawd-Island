@@ -35,6 +35,16 @@ final class UsageStore {
         let tokensToday = today.reduce(0) { $0 + $1.totalTokens }
         let costToday = today.reduce(0) { $0 + PricingTable.cost(for: $1) }
 
+        var byProject: [String: (tokens: Int, cost: Double)] = [:]
+        for e in today {
+            let key = e.projectPath ?? ""
+            byProject[key, default: (0, 0)].tokens += e.totalTokens
+            byProject[key, default: (0, 0)].cost += PricingTable.cost(for: e)
+        }
+        let projectsToday = byProject
+            .map { ProjectUsage(path: $0.key, tokens: $0.value.tokens, cost: $0.value.cost) }
+            .sorted { $0.cost > $1.cost }
+
         var byModel: [String: Int] = [:]
         for e in today { byModel[e.model, default: 0] += e.totalTokens }
         let topModel = byModel.max { $0.value < $1.value }?.key
@@ -61,6 +71,7 @@ final class UsageStore {
             blockEnd: active?.end,
             tokensToday: tokensToday,
             costToday: costToday,
+            projectsToday: projectsToday,
             activeSessionTokens: activeSessionTokens,
             weeklyTokens: weeklyTokens,
             topModel: topModel,

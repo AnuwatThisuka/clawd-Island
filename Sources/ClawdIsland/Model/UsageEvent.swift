@@ -10,6 +10,8 @@ struct UsageEvent: Equatable, Sendable {
     let outputTokens: Int
     let cacheCreationTokens: Int
     let cacheReadTokens: Int
+    /// Absolute working directory the session ran in (the log line's `cwd`), if recorded.
+    var projectPath: String? = nil
 
     var totalTokens: Int {
         inputTokens + outputTokens + cacheCreationTokens + cacheReadTokens

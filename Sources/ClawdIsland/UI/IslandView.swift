@@ -193,7 +193,7 @@ struct IslandView: View {
             divider
 
             limitRow(title: "5-Hour Limit", icon: "hourglass",
-                     value: model.sessionUsage, segments: 5,
+                     value: model.sessionUsage,
                      resets: model.sessionResetsAt,
                      eta: prefReset ? nil : model.etaToLimit)
                 .contentShape(Rectangle())
@@ -205,7 +205,7 @@ struct IslandView: View {
             divider
 
             limitRow(title: "7-Day Limit", icon: "calendar.badge.checkmark",
-                     value: model.weeklyUsage, segments: 7,
+                     value: model.weeklyUsage,
                      resets: model.weeklyResetsAt,
                      breakdown: weeklyBreakdown)
                 .padding(.horizontal, 16)
@@ -285,8 +285,8 @@ struct IslandView: View {
             .padding(.horizontal, 16)
     }
 
-    /// One horizontal limit row: icon box, title + reset subline, segmented bar, trailing %.
-    private func limitRow(title: String, icon: String, value: Double?, segments: Int,
+    /// One horizontal limit row: icon box, title + reset subline, progress bar, trailing %.
+    private func limitRow(title: String, icon: String, value: Double?,
                           resets: Date?, eta: TimeInterval? = nil,
                           breakdown: String? = nil) -> some View {
         let frac = value ?? 0
@@ -328,7 +328,7 @@ struct IslandView: View {
                             .foregroundStyle(color.opacity(0.7))
                     }
                 }
-                segmentedBar(fraction: frac, segments: segments, color: color)
+                progressBar(fraction: frac, color: color)
             }
         }
     }
@@ -342,17 +342,19 @@ struct IslandView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    /// Segmented meter: `segments` slots, filled left-to-right by `fraction`.
-    private func segmentedBar(fraction: Double, segments: Int, color: Color) -> some View {
+    /// Continuous meter: single track filled left-to-right by `fraction`.
+    private func progressBar(fraction: Double, color: Color) -> some View {
         let clamped = min(1, max(0, fraction))
-        let filled = Int((clamped * Double(segments)).rounded(.toNearestOrAwayFromZero))
-        return HStack(spacing: 3) {
-            ForEach(0..<segments, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(i < filled ? color : Color.white.opacity(0.12))
-                    .frame(height: 8)
+        return GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+                Capsule(style: .continuous)
+                    .fill(color)
+                    .frame(width: geo.size.width * clamped)
             }
         }
+        .frame(height: 8)
         .animation(.easeInOut(duration: 0.45), value: fraction)
     }
 

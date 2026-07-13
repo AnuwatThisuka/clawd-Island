@@ -197,8 +197,8 @@ struct IslandView: View {
                      resets: model.sessionResetsAt,
                      eta: prefReset ? nil : model.etaToLimit)
                 .contentShape(Rectangle())
-                .onTapGesture { if model.etaToLimit != nil { prefReset.toggle() } }
-                .help(model.etaToLimit != nil ? "Click to switch reset / burn-rate" : "")
+                .onTapGesture { prefReset.toggle() }
+                .help("Click to switch reset / burn-rate")
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 

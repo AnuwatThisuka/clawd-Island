@@ -72,25 +72,30 @@ struct PermissionView: View {
     }
 
     private var buttons: some View {
-        HStack(spacing: 8) {
-            actionButton(title: "Deny", tint: Color.permissionRed, action: onDeny)
-            actionButton(title: "Approve", tint: Color.tileGreen, action: onApprove)
+        HStack(spacing: 10) {
+            // Deny: dark grey pill, light text — the quiet, secondary choice.
+            actionButton(title: "Deny",
+                         fill: Color.white.opacity(0.14),
+                         textColor: .white.opacity(0.85),
+                         action: onDeny)
+            // Allow: solid white pill, black text — the emphasised, primary choice.
+            actionButton(title: "Allow",
+                         fill: .white,
+                         textColor: .black,
+                         action: onApprove)
         }
     }
 
-    private func actionButton(title: String, tint: Color, action: @escaping () -> Void) -> some View {
+    private func actionButton(title: String, fill: Color, textColor: Color,
+                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(textColor)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(tint.opacity(0.16))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-                )
+                .padding(.vertical, 8)
+                .background(fill)
+                .clipShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -99,6 +104,4 @@ struct PermissionView: View {
 extension Color {
     /// Attention accent for a pending permission (a stop, not the green "running" state).
     static let permissionAmber = Color(red: 1.0, green: 0.75, blue: 0.3)
-    /// Deny action tint.
-    static let permissionRed = Color(red: 1.0, green: 0.45, blue: 0.42)
 }
